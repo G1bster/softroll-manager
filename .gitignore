@@ -1,0 +1,9 @@
+# WoW Addon Ignored Files
+.git/
+.vscode/
+.idea/
+.DS_Store
+*.bak
+*.old
+*.zip
+*.rar
