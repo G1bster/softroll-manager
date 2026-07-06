@@ -2,7 +2,7 @@
 ## Title: |cff33bbffSoftRoll Manager|r
 ## Notes: Soft Reserve (SR) management addon for Raid Leaders. Supports ICC and Ruby Sanctum with role-based SR limits, Atlas Loot browser, and per-player overrides.
 ## Author: SoftRoll
-## Version: 4.2.1
+## Version: 4.2.2
 ## SavedVariablesPerCharacter: SoftRollDB
 ## DefaultState: Enabled
 

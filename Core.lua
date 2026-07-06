@@ -10,7 +10,7 @@
 SoftRoll = {}
 local SR = SoftRoll
 
-SR.VERSION    = "4.2.1"
+SR.VERSION    = "4.2.2"
 SR.ADDON_NAME = "SoftRollManager"
 
 --------------------------------------------------------------

@@ -1,6 +1,6 @@
 # SoftRollManager
 
-**SoftRollManager** — це World of Warcraft (WotLK 3.3.5a) аддон для зручного керування здобиччю за системою Soft Reserve (SR). Він спеціально розроблений для спрощення роботи Рейд Лідерів (РЛ) і гравців під час рейдів. Підтримує таблиці луту для ЦЛК (Icecrown Citadel) та РС (Ruby Sanctum).
+**SoftRollManager** — це World of Warcraft (WotLK 3.3.5a) аддон для зручного керування лутом за системою Soft Reserve (SR). Він спеціально розроблений для спрощення роботи Рейд Лідерів (РЛ) і гравців під час рейдів. Підтримує таблиці луту для ЦЛК (Icecrown Citadel) та РС (Ruby Sanctum).
 
 ## Основні можливості
 
