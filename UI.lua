@@ -2768,16 +2768,38 @@ function SR:BuildLootBrowser(parent)
     self.lbItemChild = itemChild
     self.lbItemRows  = {}
 
-    local reserveBtn = MakeButton(parent, "Засофтити", 140, 28)
-    reserveBtn:SetPoint("BOTTOMRIGHT", -8, 8)
-    reserveBtn:SetScript("OnClick", function()
-        if not SR.lbSelectedItemID then
-            SR:Print("Спочатку виберіть предмет зі списку.")
-            return
-        end
-        SR:RequestSRFromUI(SR.lbSelectedItemID, 1, SR:GetLocalPlayerName())
-    end)
-    self.lbReserveBtn = reserveBtn
+    self.lbReserveBtns = {}
+    for i = 0, 4 do
+        local text = (i == 0) and "|cffff4444Видалити софт|r" or ("x" .. i)
+        local btnWidth = (i == 0) and 110 or 32
+        local btn = MakeButton(parent, text, btnWidth, 28)
+        
+        -- Позиціонування буде динамічним через LayoutReserveButtons
+        
+        btn:SetScript("OnClick", function()
+            if not SR.lbSelectedItemID then
+                SR:Print("Спочатку виберіть предмет зі списку.")
+                return
+            end
+            
+            local target = SR.lbTargetPlayer or SR:GetLocalPlayerName()
+            
+            if i == 0 then
+                -- Логіка видалення
+                if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
+                    SR:RemoveSR(target, SR.lbSelectedItemID)
+                    SR:Print("Видалено предмет зі списку " .. target)
+                else
+                    SR:SendAddonMsg("R|" .. target .. "|" .. SR.lbSelectedItemID, "WHISPER", SR.sessionHost)
+                    SR:Print("Запит на видалення надіслано хосту...")
+                end
+            else
+                -- Логіка додавання (isSet = true, тобто встановлюємо точну кількість)
+                SR:RequestSRFromUI(SR.lbSelectedItemID, i, target, true)
+            end
+        end)
+        self.lbReserveBtns[i] = btn
+    end
 
     local wishlistBtn = MakeButton(parent, "В обране", 160, 28)
     wishlistBtn:SetPoint("BOTTOMLEFT", 8, 8)
@@ -3001,6 +3023,69 @@ function SR:UpdateLootBrowser()
     self:UpdateLootBrowserItems()
 end
 
+function SR:LayoutReserveButtons()
+    if not self.lbReserveBtns then return end
+    local myName = self:GetLocalPlayerName()
+    local targetName = self.lbTargetPlayer or myName
+    
+    local myLimit = self:GetSRLimit(targetName) or 3
+    local used = self:GetUsedSRCount(targetName)
+    local remaining = myLimit - used
+    
+    local itemID = self.lbSelectedItemID
+    local currentItemCount = 0
+    if itemID and self.db.reserves[targetName] then
+        local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
+        for _, e in ipairs(self.db.reserves[targetName]) do
+            if eq[e.itemID] then
+                currentItemCount = e.count or 1
+                break
+            end
+        end
+    end
+    
+    local maxAllowed = remaining + currentItemCount
+    
+    local visibleBtns = {}
+    for i = 0, 4 do
+        if i == 0 or i <= myLimit then
+            self.lbReserveBtns[i]:Show()
+            table.insert(visibleBtns, self.lbReserveBtns[i])
+            
+            if i == 0 then
+                if currentItemCount > 0 then
+                    self.lbReserveBtns[i]:Enable()
+                    self.lbReserveBtns[i]:SetText("|cffff4444Видалити софт|r")
+                else
+                    self.lbReserveBtns[i]:Disable()
+                    self.lbReserveBtns[i]:SetText("|cff666666Видалити софт|r")
+                end
+            else
+                if not itemID or i > maxAllowed then
+                    self.lbReserveBtns[i]:Disable()
+                    -- Default text gets grayed out by WoW automatically, but just in case
+                else
+                    self.lbReserveBtns[i]:Enable()
+                end
+            end
+        else
+            self.lbReserveBtns[i]:Hide()
+        end
+    end
+    
+    -- Позиціонуємо справа наліво
+    for i = #visibleBtns, 1, -1 do
+        local btn = visibleBtns[i]
+        btn:ClearAllPoints()
+        if i == #visibleBtns then
+            btn:SetPoint("BOTTOMRIGHT", -8, 8)
+        else
+            -- прив'язуємо до кнопки, що знаходиться правіше (i+1)
+            btn:SetPoint("RIGHT", visibleBtns[i+1], "LEFT", -4, 0)
+        end
+    end
+end
+
 function SR:UpdateLootBrowserItems()
     local items = {}
 
@@ -3088,6 +3173,9 @@ function SR:UpdateLootBrowserItems()
     end
 
     self.lbItemChild:SetHeight(math.max(1, #items * ITEM_H))
+
+    -- Оновлення видимості кнопок Засофтити (x0, x1, x2, x3, x4)
+    self:LayoutReserveButtons()
 end
 
 function SR:HighlightLBItem(itemID)
@@ -3114,6 +3202,9 @@ function SR:HighlightLBItem(itemID)
             self.lbWishlistBtn:SetWidth(160)
         end
     end
+
+    -- Оновлення кнопок Засофтити при зміні предмета
+    self:LayoutReserveButtons()
 end
 
 

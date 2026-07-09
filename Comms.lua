@@ -550,7 +550,7 @@ end
 --------------------------------------------------------------
 
 --- Викликається з кнопки "Зарезервувати предмет" в Оглядачі Здобичі.
-function SR:RequestSRFromUI(itemID, count, targetPlayer)
+function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
     count = count or 1
     targetPlayer = targetPlayer or self:GetLocalPlayerName()
 
@@ -582,7 +582,7 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer)
             _, link = GetItemInfo(itemID)
         end
         link = self:GetSafeItemLink(itemID, link)
-        local ok, err = self:ProcessSRRegistration(targetPlayer, link, count, false)
+        local ok, err = self:ProcessSRRegistration(targetPlayer, link, count, false, isSet)
         if ok then
             if targetPlayer == self:GetLocalPlayerName() then
                 self:Print("SR зареєстровано.")
@@ -603,9 +603,10 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer)
     end
 
     -- Клієнт → хост через приватне повідомлення аддона
+    local setFlag = isSet and "1" or "0"
     if self:CanEditSession() then
         self._pendingSRItemID = itemID
-        self:SendAddonMsg("M|" .. targetPlayer .. "|" .. itemID .. "|" .. count, "WHISPER", self.sessionHost)
+        self:SendAddonMsg("M|" .. targetPlayer .. "|" .. itemID .. "|" .. count .. "|" .. setFlag, "WHISPER", self.sessionHost)
         self:Print("Запит на реєстрацію SR (Ко-Хост) надіслано хосту...")
         return "PENDING"
     else
@@ -614,7 +615,7 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer)
             return
         end
         self._pendingSRItemID = itemID
-        self:SendAddonMsg("A|" .. itemID .. "|" .. count, "WHISPER", self.sessionHost)
+        self:SendAddonMsg("A|" .. itemID .. "|" .. count .. "|" .. setFlag, "WHISPER", self.sessionHost)
         self:Print("Запит на реєстрацію SR надіслано хосту |cffffcc00" .. self.sessionHost .. "|r…")
         return "PENDING"
     end
@@ -624,9 +625,10 @@ function SR:OnSRAddRequest(data, senderName)
     -- Тільки Активний Хост обробляє реєстрації
     if not self:IsSessionHost() then return end
 
-    local itemID, count = data:match("^(%d+)|(%d+)$")
+    local itemID, count, isSet = data:match("^(%d+)|(%d+)|?(%d*)$")
     itemID = tonumber(itemID)
     count  = tonumber(count) or 1
+    isSet  = (isSet == "1")
     if not itemID then return end
 
     if not self:IsInRaid(senderName) then
@@ -643,7 +645,7 @@ function SR:OnSRAddRequest(data, senderName)
         link = self:GetSafeItemLink(itemID, nil)
     end
 
-    local ok, err = self:ProcessSRRegistration(senderName, link, count, true)
+    local ok, err = self:ProcessSRRegistration(senderName, link, count, true, isSet)
     if ok then
         local used  = self:GetUsedSRCount(senderName)
         local limit = self:GetSRLimit(senderName)
@@ -659,9 +661,10 @@ function SR:OnSRManageRequest(data, senderName)
     if not self:IsSessionHost() then return end
     if not self:IsCoHost(senderName) then return end
 
-    local targetPlayer, itemID, count = data:match("^([^|]+)|(%d+)|(%d+)$")
+    local targetPlayer, itemID, count, isSet = data:match("^([^|]+)|(%d+)|(%d+)|?(%d*)$")
     itemID = tonumber(itemID)
     count  = tonumber(count) or 1
+    isSet  = (isSet == "1")
     if not targetPlayer or not itemID then return end
 
     local _, link = GetItemInfo(itemID)
@@ -671,7 +674,7 @@ function SR:OnSRManageRequest(data, senderName)
     end
     link = self:GetSafeItemLink(itemID, link)
 
-    local ok, err = self:ProcessSRRegistration(targetPlayer, link, count, false)
+    local ok, err = self:ProcessSRRegistration(targetPlayer, link, count, false, isSet)
     if ok then
         self:Print(senderName .. " (Ко-Хост) додав софт-рол для " .. targetPlayer .. ": " .. link)
         self:SendAddonMsg("K|1|SR для " .. targetPlayer .. " успішно зареєстровано.", "WHISPER", senderName)
@@ -778,7 +781,7 @@ end
 
 --- Спільна валідація + додавання SR (використовується ChatParser, Comms та інтерфейсом хоста).
 -- @param notifyHost якщо true, хост виводить повідомлення в чат (віддалена реєстрація)
-function SR:ProcessSRRegistration(senderName, itemLink, count, notifyHost)
+function SR:ProcessSRRegistration(senderName, itemLink, count, notifyHost, isSet)
     if self.sessionActive and not self:IsSessionHost() then
         return false, "Хост сесії — " .. (self.sessionHost or "інший гравець") .. "."
     end
@@ -800,14 +803,29 @@ function SR:ProcessSRRegistration(senderName, itemLink, count, notifyHost)
     local used      = self:GetUsedSRCount(senderName)
     local remaining = limit - used
 
-    if count > remaining then
+    local requiredSlots = count
+    if isSet then
+        local itemID = self:GetItemIDFromLink(itemLink)
+        if itemID and self.db.reserves[senderName] then
+            local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
+            for _, e in ipairs(self.db.reserves[senderName]) do
+                if eq[e.itemID] then
+                    requiredSlots = count - (e.count or 1)
+                    if requiredSlots < 0 then requiredSlots = 0 end
+                    break
+                end
+            end
+        end
+    end
+
+    if requiredSlots > remaining then
         if remaining <= 0 then
             return false, "Не залишилось вільних слотів для SR (" .. used .. " з " .. limit .. ")."
         end
         return false, "У вас залишилось лише " .. remaining .. " SR (" .. used .. " з " .. limit .. " використано)."
     end
 
-    local ok, err = self:AddSR(senderName, itemLink, count)
+    local ok, err = self:AddSR(senderName, itemLink, count, isSet)
     return ok, err
 end
 

@@ -541,17 +541,15 @@ end
 
 --- Реєструє 'count' кількість SR на 'itemLink' для гравця 'playerName'.
 -- @return успішність (bool), повідомлення про помилку (string|nil)
-function SR:AddSR(playerName, itemLink, count)
+function SR:AddSR(playerName, itemLink, count, isSet)
     count = count or 1
 
     if self.sessionActive and not self:IsSessionHost() then
         return false, "Сесію створено гравцем " .. (self.sessionHost or "кимсь іншим") .. "."
     end
 
-    local remaining = self:GetRemainingSR(playerName)
-    if count > remaining then
-        return false, "У вас лише " .. remaining .. " доступних SR для поточної ролі."
-    end
+    -- Ліміти вже перевірені в ProcessSRRegistration
+
 
     local itemID = self:GetItemIDFromLink(itemLink)
     if not itemID then
@@ -578,7 +576,11 @@ function SR:AddSR(playerName, itemLink, count)
     local found = false
     for _, entry in ipairs(self.db.reserves[playerName]) do
         if eq[entry.itemID] then
-            entry.count    = (entry.count or 1) + count
+            if isSet then
+                entry.count = count
+            else
+                entry.count = (entry.count or 1) + count
+            end
             entry.itemLink = itemLink
             entry.itemID   = itemID
             found = true
