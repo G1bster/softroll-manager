@@ -813,7 +813,7 @@ function SR:UpdateAdminReadOnly()
     if self.autoBtn then
         if readOnly then self.autoBtn:Disable() else self.autoBtn:Enable() end
     end
-    local canChangeSettings = self:IsAdmin()
+    local canChangeSettings = canEdit or self:IsAdmin()
     if self.instDD then
         if canChangeSettings then UIDropDownMenu_EnableDropDown(self.instDD)
         else UIDropDownMenu_DisableDropDown(self.instDD) end
@@ -925,6 +925,8 @@ function SR:BuildDashboard(parent)
                 SR:UpdateLedger()
                 if SR:IsSessionHost() then
                     SR:SendAddonMsg("I|" .. SR.db.instance .. "|" .. SR.db.srMode, "RAID")
+                elseif SR.sessionActive and SR:CanEditSession() then
+                    SR:SendAddonMsg("I|" .. SR.db.instance .. "|" .. SR.db.srMode, "WHISPER", SR.sessionHost)
                 end
             end
             UIDropDownMenu_AddButton(info, level)
@@ -960,6 +962,8 @@ function SR:BuildDashboard(parent)
                 SR:Print("Режим SR змінено на |cffffcc00" .. SR.SR_MODE_LABELS[mode] .. "|r")
                 if SR:IsSessionHost() then
                     SR:SendAddonMsg("I|" .. SR.db.instance .. "|" .. SR.db.srMode, "RAID")
+                elseif SR.sessionActive and SR:CanEditSession() then
+                    SR:SendAddonMsg("I|" .. SR.db.instance .. "|" .. SR.db.srMode, "WHISPER", SR.sessionHost)
                 end
             end
             UIDropDownMenu_AddButton(info, level)
@@ -974,7 +978,16 @@ function SR:BuildDashboard(parent)
     lockBtn:SetPoint("TOPLEFT", 10, -40)
     lockBtn:SetScript("OnClick", function()
         if SR:IsSessionReadOnly() then return end
-        SR.locked = not SR.locked
+        local newLock = not SR.locked
+        -- Ко-хост: надсилаємо запит хосту замість локальної зміни
+        if SR.sessionActive and not SR:IsSessionHost() then
+            if SR:CanEditSession() then
+                SR:SendAddonMsg("T|" .. (newLock and "1" or "0"), "WHISPER", SR.sessionHost)
+                SR:Print("Запит на зміну блокування надіслано хосту...")
+            end
+            return
+        end
+        SR.locked = newLock
         SR.db.locked = SR.locked  -- зберігаємо в db
         SR:UpdateDashboard()
         if SR.BroadcastLockState then SR:BroadcastLockState() end
@@ -1163,6 +1176,14 @@ function SR:UpdateDashboard()
         else
             self.lockBtn:SetText("Заблокувати софти")
         end
+    end
+
+    -- Оновлення тексту дропдаунів (після синхронізації з хоста)
+    if self.instDD and self.db.instance then
+        UIDropDownMenu_SetText(self.instDD, self.INSTANCE_LABELS[self.db.instance] or self.db.instance)
+    end
+    if self.modeDD and self.db.srMode then
+        UIDropDownMenu_SetText(self.modeDD, self.SR_MODE_LABELS[self.db.srMode] or self.db.srMode)
     end
 
     -- Статус сесії
@@ -1853,7 +1874,6 @@ function SR:BuildLedger(parent)
             else
                 SR:SendAddonMsg("R|" .. data.target .. "|" .. data.itemID, "WHISPER", SR.sessionHost)
                 SR:Print("Запит на видалення надіслано хосту...")
-                SendChatMessage("Видалено " .. data.link .. " з софтів гравця " .. data.target, chatType)
             end
         end,
         timeout      = 0,
@@ -2393,8 +2413,22 @@ end
 function SR:UpdateLedgerBosses()
     if not self.ledgerChild then return end
 
-    self.ledgerClearAll:Hide()
-    self.ledgerAnnounceBtn:Hide()
+    local canEditSession = SR:CanEditSession()
+    if not canEditSession then
+        if self.ledgerClearAll then self.ledgerClearAll:Hide() end
+        if self.ledgerAnnounceBtn then self.ledgerAnnounceBtn:Hide() end
+    else
+        local canClearAll = SR:IsSessionHost() or (not self.sessionActive and SR:IsSessionLeader())
+        if canClearAll then
+            if self.ledgerClearAll then
+                self.ledgerClearAll:Show()
+                self.ledgerClearAll:Enable()
+            end
+        else
+            if self.ledgerClearAll then self.ledgerClearAll:Hide() end
+        end
+        if self.ledgerAnnounceBtn then self.ledgerAnnounceBtn:Show() end
+    end
 
     -- Налаштовуємо колонки для босів
     if self.ledgerHeaders then
@@ -2746,7 +2780,7 @@ function SR:BuildLootBrowser(parent)
     self.lbReserveBtn = reserveBtn
 
     local wishlistBtn = MakeButton(parent, "В обране", 160, 28)
-    wishlistBtn:SetPoint("RIGHT", reserveBtn, "LEFT", -10, 0)
+    wishlistBtn:SetPoint("BOTTOMLEFT", 8, 8)
     wishlistBtn:SetScript("OnClick", function()
         if not SR.lbSelectedItemID then return end
         SR:ToggleWishlistItem(SR.lbSelectedItemID)
@@ -2756,11 +2790,6 @@ function SR:BuildLootBrowser(parent)
         end
     end)
     self.lbWishlistBtn = wishlistBtn
-
-    local lbHint = MakeLabel(parent, 10, C.dim[1], C.dim[2], C.dim[3], "LEFT")
-    lbHint:SetPoint("BOTTOMLEFT", 8, 14)
-    lbHint:SetWidth(150)
-    lbHint:SetText("Shift-клік - лінк в чат")
 
     -- Початковий стан
     if not self.db.lootDifficulty then self.db.lootDifficulty = "25H" end
@@ -3054,7 +3083,7 @@ function SR:UpdateLootBrowserItems()
             self.lbWishlistBtn:SetWidth(160)
         else
             self.lbWishlistBtn:SetText("В обране")
-            self.lbWishlistBtn:SetWidth(110)
+            self.lbWishlistBtn:SetWidth(160)
         end
     end
 
@@ -3082,7 +3111,7 @@ function SR:HighlightLBItem(itemID)
             self.lbWishlistBtn:SetWidth(160)
         else
             self.lbWishlistBtn:SetText("В обране")
-            self.lbWishlistBtn:SetWidth(110)
+            self.lbWishlistBtn:SetWidth(160)
         end
     end
 end

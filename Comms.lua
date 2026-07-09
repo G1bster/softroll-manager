@@ -278,11 +278,26 @@ function SR:OnAddonMessage(message, channel, sender)
     elseif cmd == "I" then
         local inst, mode = rest:match("^([^|]+)|(.*)$")
         if inst and mode then
-            self.db.instance = inst
-            self.db.srMode = mode
-            if self.UpdateDashboard then self:UpdateDashboard() end
-            if self.UpdateLedger then self:UpdateLedger() end
+            if self:IsSessionHost() then
+                -- Якщо ми хост, приймаємо зміни від ко-хостів і транслюємо в рейд
+                if self:IsCoHost(senderName) then
+                    self.db.instance = inst
+                    self.db.srMode = mode
+                    if self.UpdateDashboard then self:UpdateDashboard() end
+                    if self.UpdateLedger then self:UpdateLedger() end
+                    self:Print("Ко-хост " .. senderName .. " змінив налаштування підземелля.")
+                    self:SendAddonMsg("I|" .. inst .. "|" .. mode, "RAID")
+                end
+            else
+                -- Клієнт: приймаємо зміни від хоста
+                self.db.instance = inst
+                self.db.srMode = mode
+                if self.UpdateDashboard then self:UpdateDashboard() end
+                if self.UpdateLedger then self:UpdateLedger() end
+            end
         end
+    elseif cmd == "T" then
+        self:OnLockChangeRequest(rest, senderName)
     end
 end
 
@@ -321,6 +336,27 @@ function SR:OnOverrideChangeRequest(data, senderName)
         limit = tonumber(limit)
         self:SetPlayerOverride(pName, limit)
         self:Print("Ко-хост " .. senderName .. " змінив ліміт " .. pName .. " на " .. (limit > 0 and limit or "стандартний"))
+    end
+end
+
+--- Обробка запиту на зміну блокування від ко-хоста
+function SR:OnLockChangeRequest(data, senderName)
+    if not self:IsSessionHost() then return end
+    if not self:IsCoHost(senderName) then return end
+
+    self.locked = (data == "1")
+    self.sessionLocked = self.locked
+    self.db.locked = self.locked
+    self:RefreshSessionUI()
+    self:BroadcastLockState()
+
+    local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
+    if self.locked then
+        self:Print("Ко-хост " .. senderName .. " ЗАБЛОКУВАВ софт-роли.")
+        SendChatMessage("Реєстрацію софт-ролів ЗАБЛОКОВАНО.", chatType)
+    else
+        self:Print("Ко-хост " .. senderName .. " РОЗБЛОКУВАВ софт-роли.")
+        SendChatMessage("Реєстрацію софт-ролів РОЗБЛОКОВАНО.", chatType)
     end
 end
 
@@ -369,6 +405,20 @@ function SR:OnHello(senderName)
     if self:IsSessionHost() and self.sessionActive then
         self:SendAddonMsg("S|" .. self.sessionHost, "WHISPER", senderName)
         self:SendAddonMsg("L|" .. (self.locked and "1" or "0"), "WHISPER", senderName)
+        -- Відправляємо список ко-хостів, щоб після /reload гравець знав свій статус
+        if self.db.coHosts then
+            local hostsList = {}
+            for name, active in pairs(self.db.coHosts) do
+                if active then hostsList[#hostsList + 1] = name end
+            end
+            if #hostsList > 0 then
+                self:SendAddonMsg("O|" .. table.concat(hostsList, ","), "WHISPER", senderName)
+            end
+        end
+        -- Відправляємо поточне підземелля/режим
+        if self.db.instance then
+            self:SendAddonMsg("I|" .. self.db.instance .. "|" .. self.db.srMode, "WHISPER", senderName)
+        end
     end
     
     if self.sessionActive and self.sessionHost == senderName and not self:IsSessionHost() then
@@ -492,8 +542,7 @@ function SR:OnCoHostsUpdate(data)
             self.sessionCoHosts[name] = true
         end
     end
-    if self.UpdateDashboard then self:UpdateDashboard() end
-    if self.UpdateLootBrowserItems then self:UpdateLootBrowserItems() end
+    self:RefreshSessionUI()
 end
 
 --------------------------------------------------------------
