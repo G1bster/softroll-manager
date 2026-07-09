@@ -395,29 +395,51 @@ function SR:CreateUI()
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
 
-    local infoBtn = CreateFrame("Button", nil, f)
-    infoBtn:SetSize(24, 24)
-    infoBtn:SetPoint("RIGHT", close, "LEFT", -4, 0)
-    infoBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
-    infoBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
-    infoBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    local infoIcon = infoBtn:CreateTexture(nil, "OVERLAY")
-    infoIcon:SetTexture("Interface\\FriendsFrame\\InformationIcon")
-    infoIcon:SetSize(14, 14)
-    infoIcon:SetPoint("CENTER", infoBtn, "CENTER", 0, -1)
+    local exportBtn = CreateFrame("Button", nil, f)
+    exportBtn:SetSize(24, 24)
+    exportBtn:SetPoint("RIGHT", close, "LEFT", -4, 0)
+    exportBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    exportBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+    exportBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    local exportIcon = exportBtn:CreateTexture(nil, "OVERLAY")
+    exportIcon:SetTexture("Interface\\GuildFrame\\GuildLogo-NoLogo")
+    exportIcon:SetSize(14, 14)
+    exportIcon:SetPoint("CENTER", exportBtn, "CENTER", 0, -1)
     
-    infoBtn:SetScript("OnClick", function() SR:ToggleInfoFrame() end)
-    infoBtn:SetScript("OnEnter", function(self)
+    local exportDD = CreateFrame("Frame", "SRExportDropDown", f, "UIDropDownMenuTemplate")
+    exportDD:Hide()
+
+    exportBtn:SetScript("OnClick", function(self)
+        if DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == exportDD then
+            CloseDropDownMenus()
+            return
+        end
+        ToggleDropDownMenu(1, nil, exportDD, self, 0, 0)
+    end)
+    exportBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Інформація та Інструкція")
+        GameTooltip:AddLine("Експорт софтів")
         GameTooltip:Show()
     end)
-    infoBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    self.infoBtn = infoBtn
+    exportBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.exportBtn = exportBtn
+
+    UIDropDownMenu_Initialize(exportDD, function(self, level)
+        level = level or 1
+        if level ~= 1 then return end
+        
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = "Discord"
+        info.notCheckable = true
+        info.func = function()
+            SR:ShowExportWindow("discord")
+        end
+        UIDropDownMenu_AddButton(info, level)
+    end)
 
     local settingsBtn = CreateFrame("Button", nil, f)
     settingsBtn:SetSize(24, 24)
-    settingsBtn:SetPoint("RIGHT", infoBtn, "LEFT", -4, 0)
+    settingsBtn:SetPoint("RIGHT", exportBtn, "LEFT", -4, 0)
     settingsBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
     settingsBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
     settingsBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
@@ -3722,4 +3744,160 @@ function SR:ToggleInfoFrame()
         self.infoFrame = f
     end
     self.infoFrame:Show()
+end
+
+--------------------------------------------------------------
+-- ЕКСПОРТ (Discord)
+--------------------------------------------------------------
+function SR:ShowExportWindow(formatType)
+    if not self.exportFrame then
+        local f = CreateFrame("Frame", "SRExportFrame", UIParent)
+        f:SetSize(450, 500)
+        f:SetPoint("CENTER")
+        f:SetBackdrop({
+            bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        f:SetBackdropColor(0, 0, 0, 0.95)
+        f:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+        f:SetFrameStrata("DIALOG")
+        f:EnableMouse(true)
+        f:SetMovable(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", f.StartMoving)
+        f:SetScript("OnDragStop", f.StopMovingOrSizing)
+
+        local title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        title:SetPoint("TOP", 0, -12)
+        title:SetText("Експорт софтів (Discord)")
+
+        local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", -4, -4)
+
+        local scrollFrame = CreateFrame("ScrollFrame", "SRExportScrollFrame", f, "UIPanelScrollFrameTemplate")
+        scrollFrame:SetPoint("TOPLEFT", 15, -45)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -35, 40)
+
+        local editBox = CreateFrame("EditBox", "SRExportEditBox", scrollFrame)
+        editBox:SetWidth(380)
+        editBox:SetMultiLine(true)
+        editBox:SetAutoFocus(false)
+        editBox:SetFontObject("ChatFontNormal")
+        editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        scrollFrame:SetScrollChild(editBox)
+
+        f.editBox = editBox
+
+        local copyLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        copyLabel:SetPoint("BOTTOM", 0, 15)
+        copyLabel:SetText("Натисніть Ctrl+C щоб скопіювати текст")
+
+        self.exportFrame = f
+    end
+
+    local text = ""
+    if formatType == "discord" then
+        local bossTrans = {
+            ["Лорд Марроугар"] = "Lord Marrowgar",
+            ["Леді Смертний Шепіт"] = "Lady Deathwhisper",
+            ["Битва на кораблях"] = "Gunship Battle",
+            ["Смертоносний Саурфанг"] = "Deathbringer Saurfang",
+            ["Тухлопуз"] = "Festergut",
+            ["Гниломорд"] = "Rotface",
+            ["Професор Мерзоцид"] = "Professor Putricide",
+            ["Рада Принців Крові"] = "Blood Prince Council",
+            ["Кривава королева Лана'тель"] = "Blood-Queen Lana'thel",
+            ["Валітрія Сновидиця"] = "Valithria Dreamwalker",
+            ["Синдрагоса"] = "Sindragosa",
+            ["Король-ліч"] = "The Lich King",
+            ["Треш ЦЛК"] = "ICC Trash",
+            ["Халіон"] = "Halion",
+            ["Trash/Інше"] = "Trash/Other"
+        }
+        
+        local bossMap = {}
+        local bossOrder = {}
+        local currentInst = self.db.instance or "ICC"
+        local lootData = self.LOOT_DATA[currentInst] or {}
+        local instLabel = currentInst == "ICC" and "ICC 25" or "RS 25"
+
+        text = "**--- Soft Reserves (" .. instLabel .. ") ---**\n\n"
+
+        for i, b in ipairs(lootData) do
+            bossMap[b.name] = { name = b.name, items = {} }
+            bossOrder[#bossOrder + 1] = b.name
+        end
+        bossMap["Trash/Інше"] = { name = "Trash/Інше", items = {} }
+        bossOrder[#bossOrder + 1] = "Trash/Інше"
+
+        for pName, list in pairs(self.db.reserves) do
+            for _, e in ipairs(list) do
+                local itemID = e.itemID or self:GetItemIDFromLink(e.itemLink)
+                if itemID then
+                    local foundBoss = "Trash/Інше"
+                    local eq = self:GetEquivalentItemIDs(itemID)
+                    for _, b in ipairs(lootData) do
+                        local drops = false
+                        for _, id in ipairs(b.loot25H or {}) do if eq[id] then drops = true break end end
+                        if not drops then
+                            for _, id in ipairs(b.loot25N or {}) do if eq[id] then drops = true break end end
+                        end
+                        if drops then foundBoss = b.name break end
+                    end
+
+                    local bItems = bossMap[foundBoss].items
+                    local existing = nil
+                    for _, itemEntry in ipairs(bItems) do
+                        if eq[itemEntry.itemID] then existing = itemEntry break end
+                    end
+
+                    local itemName = GetItemInfo(itemID) or ("Item " .. itemID)
+
+                    if existing then
+                        existing.count = existing.count + (e.count or 1)
+                        local foundRes = false
+                        for _, res in ipairs(existing.reservers) do
+                            if res.name == pName then
+                                res.count = res.count + (e.count or 1)
+                                foundRes = true break
+                            end
+                        end
+                        if not foundRes then table.insert(existing.reservers, {name = pName, count = e.count or 1}) end
+                    else
+                        table.insert(bItems, {
+                            itemID = itemID,
+                            itemName = itemName,
+                            count = e.count or 1,
+                            reservers = { {name = pName, count = e.count or 1} }
+                        })
+                    end
+                end
+            end
+        end
+
+        for _, bName in ipairs(bossOrder) do
+            local b = bossMap[bName]
+            if #b.items > 0 then
+                table.sort(b.items, function(i1, i2) return (i1.count or 0) > (i2.count or 0) end)
+                local engBossName = bossTrans[bName] or bName
+                text = text .. "**[" .. engBossName .. "]**\n"
+                for _, item in ipairs(b.items) do
+                    local parts = {}
+                    for _, res in ipairs(item.reservers) do
+                        local countStr = res.count > 1 and (" x" .. res.count) or ""
+                        table.insert(parts, res.name .. countStr)
+                    end
+                    text = text .. "* [" .. item.itemName .. "](<https://www.wowhead.com/wotlk/item=" .. item.itemID .. ">) (" .. item.count .. "): " .. table.concat(parts, ", ") .. "\n"
+                end
+                text = text .. "\n"
+            end
+        end
+    end
+
+    self.exportFrame.editBox:SetText(text)
+    self.exportFrame:Show()
+    self.exportFrame.editBox:HighlightText()
+    self.exportFrame.editBox:SetFocus()
 end
