@@ -600,21 +600,6 @@ function SR:AddSR(playerName, itemLink, count, isSet)
     return true, nil
 end
 
-function SR:RemoveSR(playerName, itemID)
-    if self.sessionActive and not self:IsSessionHost() then return end
-    local list = self.db.reserves[playerName]
-    if not list then return end
-    local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
-    for i, e in ipairs(list) do
-        if eq[e.itemID] then
-            table.remove(list, i)
-            break
-        end
-    end
-    if self.RefreshSessionUI then self:RefreshSessionUI() end
-    if self.BroadcastPlayerSync then self:BroadcastPlayerSync(playerName) end
-end
-
 function SR:CanEditPlayerSR(playerName)
     if self:CanEditSession() then return true end
     if playerName == self:GetLocalPlayerName() then
@@ -928,7 +913,7 @@ end
 
 function SR:AnnounceAllSR()
     local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
-    local inst = self.db.settings and self.db.settings.instance or "ICC"
+    local inst = self.db.instance or "ICC"
     SendChatMessage("Всі софт-роли (" .. (self.INSTANCE_LABELS[inst] or inst) .. "):", chatType)
     
     local names = {}

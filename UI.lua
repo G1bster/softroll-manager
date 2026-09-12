@@ -115,6 +115,51 @@ local function MakeFlatTab(parent, text, h)
 end
 
 --------------------------------------------------------------
+-- ДОПОМІЖНА ФУНКЦІЯ: Фон діалогового вікна (попапи)
+--------------------------------------------------------------
+local DIALOG_BD = {
+    bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 },
+}
+
+local function ApplyDialogBackdrop(frame, r, g, b, a)
+    frame:SetBackdrop(DIALOG_BD)
+    frame:SetBackdropColor(r or 0.08, g or 0.08, b or 0.12, a or 0.98)
+end
+
+--------------------------------------------------------------
+-- ДОПОМІЖНА ФУНКЦІЯ: Кнопка-іконка предмета з накладеною кнопкою видалення
+-- (спільний вигляд для рядків Панелі керування та Реєстру)
+--------------------------------------------------------------
+local function MakeItemIconButton(parent, size)
+    size = size or 26
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(size, size)
+
+    local iconBg = btn:CreateTexture(nil, "BACKGROUND")
+    iconBg:SetAllPoints()
+    iconBg:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    iconBg:SetVertexColor(0.08, 0.08, 0.12, 0.8)
+
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    btn.icon = icon
+
+    local del = CreateFrame("Button", nil, btn)
+    del:SetSize(12, 12)
+    del:SetPoint("TOPRIGHT", 4, 4)
+    del:SetNormalTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
+    del:SetHighlightTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Highlight")
+    del:SetPushedTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Down")
+    btn.delBtn = del
+
+    return btn
+end
+
+--------------------------------------------------------------
 -- ДОПОМІЖНА ФУНКЦІЯ: Підказка (Tooltip) з SR гравця
 --------------------------------------------------------------
 function SR:ShowPlayerSRTooltip(anchor, playerName)
@@ -223,25 +268,8 @@ function SR:UpdateLedgerItemIcons(row, list, mode)
         if j > maxIcons then break end
         local btn = row.itemIcons[j]
         if not btn then
-            btn = CreateFrame("Button", nil, row.iconStrip)
-            btn:SetSize(26, 26)
-
-            local iconBg = btn:CreateTexture(nil, "BACKGROUND")
-            iconBg:SetAllPoints()
-            iconBg:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
-            iconBg:SetVertexColor(0.08, 0.08, 0.12, 0.8)
-
-            local icon = btn:CreateTexture(nil, "ARTWORK")
-            icon:SetPoint("TOPLEFT", 1, -1)
-            icon:SetPoint("BOTTOMRIGHT", -1, 1)
-            btn.icon = icon
-
-            local del = CreateFrame("Button", nil, btn)
-            del:SetSize(12, 12)
-            del:SetPoint("TOPRIGHT", 4, 4)
-            del:SetNormalTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
-            del:SetHighlightTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Highlight")
-            del:SetPushedTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Down")
+            btn = MakeItemIconButton(row.iconStrip, 26)
+            local del = btn.delBtn
             del:SetScript("OnClick", function()
                 if not btn.itemID then return end
                 if SR:CanEditSession() and row.playerName ~= SR:GetLocalPlayerName() then
@@ -257,7 +285,6 @@ function SR:UpdateLedgerItemIcons(row, list, mode)
                     end
                 end
             end)
-            btn.delBtn = del
 
             btn.countFS = btn:CreateFontString(nil, "OVERLAY")
             btn.countFS:SetFont("Fonts\\ARIALN.TTF", 12, "OUTLINE")
@@ -353,13 +380,7 @@ function SR:CreateUI()
     local f = CreateFrame("Frame", "SoftRollMainFrame", UIParent)
     f:SetSize(FRAME_W, FRAME_H)
     f:SetPoint("CENTER")
-    f:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-    })
-    f:SetBackdropColor(0.07, 0.07, 0.10, 0.97)
+    ApplyDialogBackdrop(f, 0.07, 0.07, 0.10, 0.97)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
@@ -1325,13 +1346,7 @@ function SR:BuildOverridePopup()
     local popup = CreateFrame("Frame", "SROverridePopup", UIParent)
     popup:SetSize(268, 162)
     popup:SetPoint("CENTER")
-    popup:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-    })
-    popup:SetBackdropColor(0.08, 0.08, 0.12, 0.98)
+    ApplyDialogBackdrop(popup, 0.08, 0.08, 0.12, 0.98)
     popup:SetFrameStrata("DIALOG")
     popup:SetFrameLevel(100)
     popup:SetMovable(true)
@@ -1437,13 +1452,7 @@ function SR:BuildEditPlayerPopup()
 
     local popup = CreateFrame("Frame", "SREditPlayerPopup", UIParent)
     popup:SetSize(400, 140)
-    popup:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile     = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-    })
-    popup:SetBackdropColor(0.08, 0.08, 0.12, 0.98)
+    ApplyDialogBackdrop(popup, 0.08, 0.08, 0.12, 0.98)
     popup:SetFrameStrata("DIALOG")
     popup:SetFrameLevel(100)
     popup:SetMovable(true)
@@ -2074,33 +2083,15 @@ local function GetLedgerRow(container, index)
     row.itemIcons = {}
 
     for j = 1, LEDGER_MAX_ICONS do
-        local btn = CreateFrame("Button", nil, row.iconStrip)
-        btn:SetSize(26, 26)
+        local btn = MakeItemIconButton(row.iconStrip, 26)
         btn:SetPoint("LEFT", (j - 1) * 28 + 2, 0)
 
-        local iconBg = btn:CreateTexture(nil, "BACKGROUND")
-        iconBg:SetAllPoints()
-        iconBg:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
-        iconBg:SetVertexColor(0.08, 0.08, 0.12, 0.8)
-
-        local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetPoint("TOPLEFT", 1, -1)
-        icon:SetPoint("BOTTOMRIGHT", -1, 1)
-        btn.icon = icon
-
-        -- Кнопка видалення
-        local del = CreateFrame("Button", nil, btn)
-        del:SetSize(12, 12)
-        del:SetPoint("TOPRIGHT", 4, 4)
-        del:SetNormalTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
-        del:SetHighlightTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Highlight")
-        del:SetPushedTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Down")
+        local del = btn.delBtn
         del:SetScript("OnClick", function()
             if not btn.itemID then return end
             local dialog = StaticPopup_Show("SOFTROLL_CONFIRM_REMOVE_ITEM", btn.itemLink or ("Предмет #" .. btn.itemID), row.playerName)
             if dialog then dialog.data = { target = row.playerName, itemID = btn.itemID, link = btn.itemLink or ("Предмет #" .. btn.itemID) } end
         end)
-        btn.delBtn = del
 
         btn.countFS = btn:CreateFontString(nil, "OVERLAY")
         btn.countFS:SetFont("Fonts\\ARIALN.TTF", 11, "OUTLINE")
