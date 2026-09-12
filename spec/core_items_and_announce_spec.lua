@@ -443,11 +443,73 @@ describe("SR item cache, announcements, roll tracker, and slash handler (Core.lu
             assert.is_true(SR.locked)
         end)
 
+        it("syncs sessionLocked and broadcasts lock state on /sr lock and unlock", function()
+            local broadcasted = false
+            SR.BroadcastLockState = function() broadcasted = true end
+
+            SR:SlashHandler("lock")
+            assert.is_true(SR.locked)
+            assert.is_true(SR.sessionLocked)
+            assert.is_true(broadcasted)
+
+            broadcasted = false
+            SR:SlashHandler("unlock")
+            assert.is_false(SR.locked)
+            assert.is_false(SR.sessionLocked)
+            assert.is_true(broadcasted)
+        end)
+
         it("delegates anything else to ToggleUI", function()
             local called = false
             SR.ToggleUI = function() called = true end
             SR:SlashHandler("whatever")
             assert.is_true(called)
+        end)
+    end)
+
+    describe("Channel resolution and long message chunking", function()
+        it("GetAnnouncementChannel chooses correct channel depending on group state", function()
+            -- Solo
+            assert.are.equal("SAY", SR:GetAnnouncementChannel(false))
+            assert.are.equal("SAY", SR:GetAnnouncementChannel(true))
+
+            -- 5-man Party
+            wow.state.party = { "P1", "P2" }
+            assert.are.equal("PARTY", SR:GetAnnouncementChannel(false))
+            assert.are.equal("PARTY", SR:GetAnnouncementChannel(true))
+            wow.state.party = {}
+
+            -- Raid (normal member)
+            wow.addRaidMember("TestPlayer", 0)
+            assert.are.equal("RAID", SR:GetAnnouncementChannel(false))
+            assert.are.equal("RAID", SR:GetAnnouncementChannel(true))
+
+            -- Raid (leader/admin)
+            wow.state.raid[1].rank = 2
+            assert.are.equal("RAID", SR:GetAnnouncementChannel(false))
+            assert.are.equal("RAID_WARNING", SR:GetAnnouncementChannel(true))
+        end)
+
+        it("AnnounceBossItems chunks long candidate lists into messages <= 220 bytes", function()
+            local reservers = {}
+            for i = 1, 15 do
+                table.insert(reservers, { name = "LongPlayerName" .. i, count = 2 })
+            end
+
+            wow.state.sentChat = {}
+            SR:AnnounceBossItems("Saurfang", {
+                {
+                    itemLink = ITEM_LINK,
+                    itemID = 49978,
+                    reservers = reservers,
+                }
+            })
+
+            -- Header + multiple chunked lines
+            assert.is_true(#wow.state.sentChat >= 2)
+            for _, entry in ipairs(wow.state.sentChat) do
+                assert.is_true(#entry.msg <= 220)
+            end
         end)
     end)
 end)

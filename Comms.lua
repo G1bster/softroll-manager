@@ -91,7 +91,7 @@ function SR:PlayerHasLeaderAuthority(name)
     if GetNumRaidMembers() > 0 then
         for i = 1, GetNumRaidMembers() do
             local rName, rank = GetRaidRosterInfo(i)
-            if rName == name then
+            if rName and self:StripRealm(rName) == name then
                 return rank == 2
             end
         end
@@ -113,13 +113,26 @@ end
 --- Повертає true, якщо гравець у списку Ко-Хостів і є помічником в рейді.
 function SR:IsCoHost(name)
     if not name then return false end
+    name = self:StripRealm(name)
     if not self.db.coHosts then return false end
     if not self.db.coHosts[name] then return false end
-    for i = 1, GetNumRaidMembers() do
-        local rName, rank = GetRaidRosterInfo(i)
-        if rName == name then
-            return rank and rank > 0
+    if GetNumRaidMembers() > 0 then
+        for i = 1, GetNumRaidMembers() do
+            local rName, rank = GetRaidRosterInfo(i)
+            if rName and self:StripRealm(rName) == name then
+                return rank and rank > 0
+            end
         end
+        return false
+    end
+    if GetNumPartyMembers() > 0 then
+        for i = 1, GetNumPartyMembers() do
+            local pName = GetUnitName("party" .. i, true)
+            if pName and self:StripRealm(pName) == name then
+                return true
+            end
+        end
+        return false
     end
     return false
 end
@@ -420,7 +433,7 @@ function SR:OnLockChangeRequest(data, senderName)
     self:RefreshSessionUI()
     self:BroadcastLockState()
 
-    local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
+    local chatType = self:GetAnnouncementChannel(true)
     if self.locked then
         self:Print(format(self.L.PRINT_COHOST_LOCKED, senderName))
         SendChatMessage(self.L.SESSION_LOCKED, chatType)

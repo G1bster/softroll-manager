@@ -98,7 +98,10 @@ function SR:BuildLootSession(parent)
             SR.editPlayerPopup.editBox:SetText(text)
             return true
         end
-        return origInsertLink(text, ...)
+        if origInsertLink then
+            return origInsertLink(text, ...)
+        end
+        return false
     end
 
     -- ── Відображення поточного предмета ──
@@ -466,7 +469,7 @@ function SR:AnnounceLootRoll()
     end
 
     local players = self:GetPlayersWithSR(self.currentLootItemID)
-    local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
+    local chatType = self:GetAnnouncementChannel(true)
 
     if chatType == "SAY" then
         self:Print(self.L.PRINT_NOT_IN_RAID_SAY)
@@ -483,14 +486,27 @@ function SR:AnnounceLootRoll()
     else
         SendChatMessage(format(self.L.LOOT_ITEM_HEADER, self.currentLootItemLink), chatType)
 
-        -- Формування списку претендентів
+        -- Формування списку претендентів (безпечне розбиття для уникнення ліміту 255 символів)
         local names = {}
         for _, p in ipairs(players) do
             local cx = (p.count > 1) and (" x" .. p.count) or ""
             names[#names + 1] = p.name .. cx
         end
 
-        SendChatMessage(format(self.L.LOOT_ROLL_CANDIDATES, table.concat(names, ", ")), chatType)
+        local header = self.L.LOOT_ROLL_CANDIDATES:gsub("%%s", "")
+        local line = header
+        for i, nameStr in ipairs(names) do
+            local sep = (i == 1) and "" or ", "
+            if #line + #sep + #nameStr > 220 then
+                SendChatMessage(line, chatType)
+                line = "   " .. nameStr
+            else
+                line = line .. sep .. nameStr
+            end
+        end
+        if line ~= "" then
+            SendChatMessage(line, chatType)
+        end
     end
 
     if self.UpdateLootSession then self:UpdateLootSession() end

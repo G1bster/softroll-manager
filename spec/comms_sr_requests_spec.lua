@@ -40,6 +40,17 @@ describe("SR remote SR-management protocol: requests, replies, co-host commands 
             wow.addRaidMember("Ann", 2)
             assert.is_false(SR:IsCoHost("Ann"))
         end)
+
+        it("strips realm suffix when verifying raid rank for co-host", function()
+            wow.addRaidMember("Ann-Icecrown", 1)
+            SR.db.coHosts["Ann"] = true
+            assert.is_true(SR:IsCoHost("Ann"))
+        end)
+
+        it("PlayerHasLeaderAuthority strips realm suffix when checking raid leader rank", function()
+            wow.addRaidMember("Leader-Icecrown", 2)
+            assert.is_true(SR:PlayerHasLeaderAuthority("Leader"))
+        end)
     end)
 
     describe("CanEditSession / IsSessionReadOnly", function()

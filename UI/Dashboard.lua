@@ -110,10 +110,11 @@ function SR:BuildDashboard(parent)
             return
         end
         SR.locked = newLock
+        SR.sessionLocked = newLock
         SR.db.locked = SR.locked  -- зберігаємо в db
         SR:UpdateDashboard()
         if SR.BroadcastLockState then SR:BroadcastLockState() end
-        local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
+        local chatType = SR:GetAnnouncementChannel(true)
         if SR.locked then
             SR:Print(SR.L.PRINT_STATUS_LOCKED)
             SendChatMessage(SR.L.SESSION_LOCKED, chatType)

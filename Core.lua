@@ -160,6 +160,8 @@ function SR:Initialize()
     -- Слеш команди
     SLASH_SOFTROLL1 = "/sr"
     SLASH_SOFTROLL2 = "/softroll"
+    SLASH_SOFTROLL3 = "/ср"
+    SLASH_SOFTROLL4 = "/софтрол"
     SlashCmdList["SOFTROLL"] = function(msg) SR:SlashHandler(msg) end
 
     -- Створення UI, хуки для зв'язку та чату
@@ -194,10 +196,22 @@ function SR:SlashHandler(msg)
         end
     elseif msg == "lock" then
         self.locked = true
+        self.sessionLocked = true
+        self.db.locked = true
         self:Print(self.L.PRINT_STATUS_LOCKED)
+        if self.UpdateDashboard then self:UpdateDashboard() end
+        if self.BroadcastLockState then self:BroadcastLockState() end
+        local chatType = self:GetAnnouncementChannel(true)
+        SendChatMessage(self.L.SESSION_LOCKED, chatType)
     elseif msg == "unlock" then
         self.locked = false
+        self.sessionLocked = false
+        self.db.locked = false
         self:Print(self.L.PRINT_STATUS_UNLOCKED)
+        if self.UpdateDashboard then self:UpdateDashboard() end
+        if self.BroadcastLockState then self:BroadcastLockState() end
+        local chatType = self:GetAnnouncementChannel(true)
+        SendChatMessage(self.L.SESSION_UNLOCKED, chatType)
     elseif msg == "announce" then
         self:AnnounceAllSR()
     elseif msg == "help" then
@@ -272,6 +286,7 @@ function SR:OnGroupRosterUpdate()
         if GetNumRaidMembers() > 0 then
             for i = 1, GetNumRaidMembers() do
                 local name, _, _, _, _, _, _, online = GetRaidRosterInfo(i)
+                if name then name = self:StripRealm(name) end
                 if name == self.sessionHost then
                     hostInGroup = true
                     hostOnline = online
@@ -348,7 +363,7 @@ function SR:GetRaidMembers()
             local name, rank, _, level, _, fileName, _, online, _, role = GetRaidRosterInfo(i)
             if name then
                 members[#members + 1] = {
-                    name     = name,
+                    name     = self:StripRealm(name),
                     rank     = rank,
                     class    = fileName,
                     online   = online,
@@ -396,9 +411,12 @@ function SR:GetRaidMembers()
 end
 
 function SR:IsInRaid(playerName)
+    if not playerName then return false end
+    playerName = self:StripRealm(playerName)
     if GetNumRaidMembers() > 0 then
         for i = 1, GetNumRaidMembers() do
-            if (GetRaidRosterInfo(i)) == playerName then return true end
+            local rName = GetRaidRosterInfo(i)
+            if rName and self:StripRealm(rName) == playerName then return true end
         end
         return false
     end
@@ -408,14 +426,23 @@ function SR:IsInRaid(playerName)
     -- на IsInRaid) ніколи не проходить для звичайної паті на 5 осіб.
     if playerName == self:GetLocalPlayerName() then return true end
     for i = 1, GetNumPartyMembers() do
-        if self:StripRealm(GetUnitName("party" .. i, true)) == playerName then return true end
+        local name = GetUnitName("party" .. i, true)
+        if name and self:StripRealm(name) == playerName then return true end
     end
     return false
 end
 
 function SR:IsAdmin()
     if GetNumRaidMembers() > 0 then
-        return IsRaidLeader() or IsRaidOfficer()
+        if IsRaidLeader() then return true end
+        if IsRaidOfficer and IsRaidOfficer() then return true end
+        for i = 1, GetNumRaidMembers() do
+            local name, rank = GetRaidRosterInfo(i)
+            if name and self:StripRealm(name) == self:GetLocalPlayerName() then
+                return (rank or 0) > 0
+            end
+        end
+        return false
     elseif GetNumPartyMembers() > 0 then
         return IsPartyLeader()
     end
@@ -922,15 +949,28 @@ function SR:AnnouncePlayer(pName, chatType)
     end
 end
 
+function SR:GetAnnouncementChannel(preferWarning)
+    if GetNumRaidMembers() > 0 then
+        if preferWarning and self:IsAdmin() then
+            return "RAID_WARNING"
+        end
+        return "RAID"
+    elseif GetNumPartyMembers() > 0 then
+        return "PARTY"
+    else
+        return "SAY"
+    end
+end
+
 function SR:AnnounceAllSR()
-    local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
+    local chatType = self:GetAnnouncementChannel(false)
     local inst = self.db.instance or "ICC"
     SendChatMessage(format(self.L.ANNOUNCE_ALL_HEADER, (self.INSTANCE_LABELS[inst] or inst)), chatType)
     
     local names = {}
-    for i = 1, GetNumRaidMembers() do
-        local name = GetRaidRosterInfo(i)
-        if name then names[#names+1] = name end
+    local members = self:GetRaidMembers()
+    for _, m in ipairs(members) do
+        names[#names+1] = m.name
     end
     if #names == 0 then names = {self:GetLocalPlayerName()} end
     table.sort(names)
@@ -949,13 +989,13 @@ function SR:AnnounceAllSR()
 end
 
 function SR:AnnounceMissingSR()
-    local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
+    local chatType = self:GetAnnouncementChannel(false)
     SendChatMessage(self.L.ANNOUNCE_MISSING_HEADER, chatType)
     
     local names = {}
-    for i = 1, GetNumRaidMembers() do
-        local name = GetRaidRosterInfo(i)
-        if name then names[#names+1] = name end
+    local members = self:GetRaidMembers()
+    for _, m in ipairs(members) do
+        names[#names+1] = m.name
     end
     if #names == 0 then names = {self:GetLocalPlayerName()} end
     table.sort(names)
@@ -975,12 +1015,12 @@ function SR:AnnounceMissingSR()
 end
 
 function SR:AnnouncePlayerSR(pName)
-    local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
+    local chatType = self:GetAnnouncementChannel(false)
     self:AnnouncePlayer(pName, chatType)
 end
 
 function SR:AnnounceBossItems(bossName, items)
-    local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
+    local chatType = self:GetAnnouncementChannel(false)
     if not items or #items == 0 then
         SendChatMessage(format(self.L.ANNOUNCE_BOSS_EMPTY, bossName), chatType)
         return
@@ -1003,14 +1043,37 @@ function SR:AnnounceBossItems(bossName, items)
                 table.insert(playersList, tostring(res))
             end
         end
-        local players = table.concat(playersList, ", ")
-        SendChatMessage(" - " .. link .. countStr .. ": " .. players, chatType)
+
+        local prefix = " - " .. link .. countStr .. ": "
+        if #playersList == 0 then
+            SendChatMessage(prefix .. "немає", chatType)
+        else
+            local line = prefix
+            for i, pStr in ipairs(playersList) do
+                local sep = (i == 1) and "" or ", "
+                if #line + #sep + #pStr > 220 then
+                    SendChatMessage(line, chatType)
+                    line = "   " .. pStr
+                else
+                    line = line .. sep .. pStr
+                end
+            end
+            if line ~= "" then
+                SendChatMessage(line, chatType)
+            end
+        end
     end
 end
 
 --------------------------------------------------------------
 -- 14. ЗАГАЛЬНІ УТИЛІТИ
 --------------------------------------------------------------
+function SR:StripRealm(name)
+    if not name then return nil end
+    local base = name:match("^([^%-]+)")
+    return base or name
+end
+
 function SR:CopyTable(src)
     if type(src) ~= "table" then return src end
     local t = {}
@@ -1060,7 +1123,7 @@ end
 function SR:EndLootRoll()
     if not self.activeRollItem then return end
 
-    local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
+    local chatType = self:GetAnnouncementChannel(false)
     local srPlayers = self:GetPlayersWithSR(self.activeRollItem)
     local hasSR = (#srPlayers > 0)
 

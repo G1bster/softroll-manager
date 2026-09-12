@@ -153,8 +153,9 @@ function SR:CreateUI()
         local assistants = {}
         for i = 1, GetNumRaidMembers() do
             local name, rank = GetRaidRosterInfo(i)
-            if name and rank > 0 and name ~= SR:GetLocalPlayerName() then
-                table.insert(assistants, name)
+            local cleanName = name and SR:StripRealm(name)
+            if cleanName and rank > 0 and cleanName ~= SR:GetLocalPlayerName() then
+                table.insert(assistants, cleanName)
             end
         end
         
@@ -591,6 +592,7 @@ function SR:CreateMinimapButton()
         local rad = math.rad(angle)
         local x = math.cos(rad) * 80
         local y = math.sin(rad) * 80
+        btn:ClearAllPoints()
         btn:SetPoint("CENTER", Minimap, "CENTER", x, y)
     end
 

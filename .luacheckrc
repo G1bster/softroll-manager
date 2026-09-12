@@ -12,6 +12,8 @@ globals = {
     "SoftRollDB",
     "SLASH_SOFTROLL1",
     "SLASH_SOFTROLL2",
+    "SLASH_SOFTROLL3",
+    "SLASH_SOFTROLL4",
     -- Blizzard globals the addon mutates (adds slash commands / popups / hooks a function).
     "SlashCmdList",
     "StaticPopupDialogs",
@@ -21,8 +23,8 @@ globals = {
 -- Blizzard/WoW 3.3.5a client API this addon only reads or calls.
 read_globals = {
     "CreateFrame", "UIParent", "Minimap", "GameTooltip", "ItemRefTooltip",
-    "DEFAULT_CHAT_FRAME", "ChatFrame1EditBox", "ChatFrameEditBox",
-    "DropDownList1", "UISpecialFrames",
+    "DEFAULT_CHAT_FRAME", "ChatFrame1EditBox", "ChatFrameEditBox", "ChatEdit_GetActiveWindow",
+    "DropDownList1", "UISpecialFrames", "RANDOM_ROLL_RESULT",
     "UnitName", "UnitClass", "UnitLevel", "UnitExists", "UnitIsConnected",
     "GetNumRaidMembers", "GetNumPartyMembers", "GetRaidRosterInfo", "GetUnitName", "GetPartyLeaderIndex",
     "IsRaidLeader", "IsRaidOfficer", "IsPartyLeader",

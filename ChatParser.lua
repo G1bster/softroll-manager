@@ -20,12 +20,14 @@ function SR:InitChatParser()
     f:RegisterEvent("CHAT_MSG_WHISPER")
     f:RegisterEvent("CHAT_MSG_RAID")
     f:RegisterEvent("CHAT_MSG_RAID_LEADER")
+    f:RegisterEvent("CHAT_MSG_PARTY")
+    f:RegisterEvent("CHAT_MSG_PARTY_LEADER")
     f:RegisterEvent("CHAT_MSG_SYSTEM")
 
     f:SetScript("OnEvent", function(self, event, msg, sender, ...)
         if event == "CHAT_MSG_WHISPER" then
             SR:HandleIncoming(msg, sender, true)
-        elseif event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" then
+        elseif event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" or event == "CHAT_MSG_PARTY" or event == "CHAT_MSG_PARTY_LEADER" then
             SR:HandleIncoming(msg, sender, false)
         elseif event == "CHAT_MSG_SYSTEM" then
             if SR.HandleSystemMsg then SR:HandleSystemMsg(msg) end
@@ -38,6 +40,9 @@ end
 --------------------------------------------------------------
 function SR:HandleIncoming(msg, sender, isWhisper)
     if not msg or msg == "" then return end
+    if sender and self.StripRealm then
+        sender = self:StripRealm(sender)
+    end
 
     -- Обробка прихованого протоколу SRManager (тільки приватні, тільки хост)
     if isWhisper and msg:sub(1, #HIDDEN_PREFIX) == HIDDEN_PREFIX then
@@ -47,7 +52,7 @@ function SR:HandleIncoming(msg, sender, isWhisper)
         return
     end
 
-    -- Реагуємо на повідомлення: !sr, +sr, #sr, ?sr або просто sr (через блок серверів)
+    -- Реагуємо на повідомлення: !sr, +sr, #sr, ?sr або просто sr, а також кирилицю: ср, !ср...
     local msgTrimmed = strtrim(msg)
     local firstWord, restArgs = msgTrimmed:match("^(%S+)%s*(.*)$")
     if not firstWord then
@@ -56,7 +61,33 @@ function SR:HandleIncoming(msg, sender, isWhisper)
     end
 
     local cmd = firstWord:lower()
-    if cmd ~= "!sr" and cmd ~= "+sr" and cmd ~= "?sr" and cmd ~= "#sr" and cmd ~= "sr" then
+    local isSRCmd = (cmd == "!sr" or cmd == "+sr" or cmd == "?sr" or cmd == "#sr" or cmd == "sr"
+                     or firstWord == "ср" or firstWord == "СР" or firstWord == "Ср"
+                     or firstWord == "!ср" or firstWord == "!СР" or firstWord == "+ср" or firstWord == "?ср" or firstWord == "#ср")
+
+    -- Підтримка shift-кліку без пробілу: sr|c... або !sr|c... (включно з кирилицею)
+    if not isSRCmd then
+        local noSpaceCmd, noSpaceRest = msgTrimmed:match("^([!+#%?]?[sS][rR])(%|c.*)$")
+        if not noSpaceCmd then
+            local pre = msgTrimmed:sub(1, 10)
+            local cut = pre:find("%|c")
+            if cut then
+                local candidate = pre:sub(1, cut - 1)
+                if candidate == "ср" or candidate == "СР" or candidate == "Ср"
+                   or candidate == "!ср" or candidate == "+ср" or candidate == "?ср" or candidate == "#ср" then
+                    noSpaceCmd = candidate
+                    noSpaceRest = msgTrimmed:sub(cut)
+                end
+            end
+        end
+        if noSpaceCmd then
+            isSRCmd = true
+            firstWord = noSpaceCmd
+            restArgs = noSpaceRest
+        end
+    end
+
+    if not isSRCmd then
         return
     end
 
@@ -382,18 +413,41 @@ end
 -- 7. ОБРОБКА СИСТЕМНИХ ПОВІДОМЛЕНЬ (РОЛИ)
 --------------------------------------------------------------
 function SR:HandleSystemMsg(msg)
-    if not self.activeRollItem then return end
+    if not self.activeRollItem or not msg then return end
 
-    -- Підтримка англійської (rolls), російської (выбрасывает), української (викидає) локалізацій
-    local name, roll, min, max = msg:match("^(%S+)%s+rolls%s+(%d+)%s+%((%d+)%-(%d+)%)")
+    local name, roll, min, max
+
+    -- Динамічне розпізнавання за глобальним рядком RANDOM_ROLL_RESULT клієнта WoW
+    if _G and _G.RANDOM_ROLL_RESULT then
+        local pattern = _G.RANDOM_ROLL_RESULT
+            :gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+            :gsub("%%%%s", "(.-)")
+            :gsub("%%%%d", "(%%d+)")
+        name, roll, min, max = msg:match("^" .. pattern .. "$")
+    end
+
+    -- Резервні шаблони для різних локалізацій, якщо системний патерн не збігся
+    if not name then
+        name, roll, min, max = msg:match("^(%S+)%s+rolls%s+(%d+)%s+%((%d+)%-(%d+)%)")
+    end
     if not name then
         name, roll, min, max = msg:match("^(%S+)%s+выбрасывает%s+(%d+)%s+%((%d+)%-(%d+)%)")
     end
     if not name then
         name, roll, min, max = msg:match("^(%S+)%s+викидає%s+(%d+)%s+%((%d+)%-(%d+)%)")
     end
+    if not name then
+        name, roll, min, max = msg:match("^(%S+)%s+würfelt%s*%.?%s*Ergebnis:%s*(%d+)%s+%((%d+)%-(%d+)%)")
+    end
+    if not name then
+        name, roll, min, max = msg:match("^(%S+)%s+obtient%s+(%d+)%s+%((%d+)%-(%d+)%)")
+    end
 
     if name and roll and min == "1" and max == "100" then
+        name = strtrim(name)
+        if self.StripRealm then
+            name = self:StripRealm(name)
+        end
         self:ProcessRoll(name, tonumber(roll))
     end
 end

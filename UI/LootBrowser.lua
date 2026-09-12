@@ -284,7 +284,10 @@ local function GetLBItemRow(container, index)
         if IsShiftKeyDown() and self.itemID then
             local _, link = GetItemInfo(self.itemID)
             if link then
-                local editBox = ChatFrame1EditBox or ChatFrameEditBox
+                if ChatEdit_InsertLink and ChatEdit_InsertLink(link) then
+                    return
+                end
+                local editBox = (ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()) or ChatFrame1EditBox or ChatFrameEditBox
                 if editBox then
                     editBox:Show()
                     editBox:SetFocus()

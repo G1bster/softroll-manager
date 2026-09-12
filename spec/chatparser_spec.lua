@@ -250,5 +250,49 @@ describe("SR chat command parsing (ChatParser.lua)", function()
             SR:HandleSystemMsg("Member rolls 25 (1-50)")
             assert.is_nil(SR.activeRolls["Member"])
         end)
+
+        it("strips realm from roller name", function()
+            SR:HandleSystemMsg("Member-Icecrown rolls 95 (1-100)")
+            assert.same({ 95 }, SR.activeRolls["Member"])
+        end)
+
+        it("parses German client roll format", function()
+            SR:HandleSystemMsg("Member würfelt. Ergebnis: 88 (1-100)")
+            assert.same({ 88 }, SR.activeRolls["Member"])
+        end)
+
+        it("parses French client roll format", function()
+            SR:HandleSystemMsg("Member obtient 72 (1-100)")
+            assert.same({ 72 }, SR.activeRolls["Member"])
+        end)
+
+        it("parses rolls dynamically using _G.RANDOM_ROLL_RESULT if set", function()
+            _G.RANDOM_ROLL_RESULT = "%s has rolled %d (%d-%d)"
+            SR:HandleSystemMsg("Member has rolled 99 (1-100)")
+            assert.same({ 99 }, SR.activeRolls["Member"])
+            _G.RANDOM_ROLL_RESULT = nil
+        end)
+    end)
+
+    describe("Extended command parsing (Cyrillic, no-space, realm stripping)", function()
+        it("accepts Cyrillic 'ср [link]' command", function()
+            SR:HandleIncoming("ср " .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("accepts link without space 'sr[link]'", function()
+            SR:HandleIncoming("sr" .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("accepts Cyrillic link without space 'ср[link]'", function()
+            SR:HandleIncoming("ср" .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("strips realm name from incoming chat sender", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK, "Member-RealmName", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
     end)
 end)
