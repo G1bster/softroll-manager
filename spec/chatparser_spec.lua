@@ -94,4 +94,127 @@ describe("SR chat command parsing (ChatParser.lua)", function()
         SR:HandleIncoming("sr clear", "Member", false)
         assert.are.equal(0, SR:GetUsedSRCount("Member"))
     end)
+
+    describe("CmdClear with a specific item link", function()
+        it("removes just that item and confirms it", function()
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR:CmdClear(ITEM_LINK, "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+            assert.matches("успішно видалено", lastWhisperTo("Member"))
+        end)
+
+        it("reports when the sender never reserved that item", function()
+            SR:AddSR("Member", ITEM_LINK, 1)
+            local otherLink = "|cffa335ee|Hitem:99999:0:0:0:0:0:0:0|h[Other]|h|r"
+            SR:CmdClear(otherLink, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member")) -- untouched
+            assert.matches("Ви не резервували", lastWhisperTo("Member"))
+        end)
+
+        it("reports when the sender has no reserves at all", function()
+            SR:CmdClear(ITEM_LINK, "Member", false)
+            assert.matches("немає зареєстрованих софтів", lastWhisperTo("Member"))
+        end)
+
+        it("reports nothing-to-clear for a bare 'clear' with no reserves", function()
+            SR:CmdClear("", "Member", false)
+            assert.matches("Немає що очищати", lastWhisperTo("Member"))
+        end)
+    end)
+
+    describe("CmdRegister targeting another player", function()
+        -- Note: HandleIncoming only ever reaches CmdRegister on the ACTIVE HOST's own
+        -- client (it returns early for everyone else), and the host's CanEditSession()
+        -- is always true on its own client — so the "unauthorized" branch below can't
+        -- actually be triggered through chat as any particular sender; it's tested by
+        -- calling CmdRegister directly with the local client put in a non-editing state.
+        before_each(function()
+            wow.addRaidMember("Target", 0)
+        end)
+
+        it("the host can register SR for a named target in the raid, notifying both", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " Target", "Leader", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Target"))
+            assert.matches("ДЛЯ Target", lastWhisperTo("Leader"))
+            assert.matches("додав вам софт%-рол", lastWhisperTo("Target"))
+        end)
+
+        it("capitalizes the target name from lowercase input", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " target", "Leader", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Target"))
+        end)
+
+        it("refuses a target that isn't in the raid", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " NoSuchPlayer", "Leader", false)
+            assert.are.equal(0, SR:GetUsedSRCount("NoSuchPlayer"))
+            assert.matches("немає у рейді", lastWhisperTo("Leader"))
+        end)
+
+        it("CmdRegister itself refuses a named target when the local client can't edit the session", function()
+            SR.sessionHost = "SomeoneElse" -- local player is no longer the host/co-host
+            SR:CmdRegister(ITEM_LINK .. " Target", "Whoever", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Target"))
+            assert.matches("Тільки РЛ або помічник", lastWhisperTo("Whoever"))
+        end)
+    end)
+
+    describe("HandleHiddenSR (<SRManager> ADD protocol)", function()
+        it("is reachable via a whisper through HandleIncoming while the local client is the active host", function()
+            SR:HandleIncoming("<SRManager>ADD " .. ITEM_LINK, "Member", true)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("ignores any command other than ADD", function()
+            SR:HandleHiddenSR("REMOVE " .. ITEM_LINK, "Member", true)
+            assert.are.equal(0, #wow.state.sentChat)
+        end)
+
+        it("replies with an error when no valid item link is present", function()
+            SR:HandleHiddenSR("ADD not a link", "Member", true)
+            assert.matches("Не знайдено дійсного посилання", lastWhisperTo("Member"))
+        end)
+
+        it("honors an 'x3' multiplier", function()
+            SR:HandleHiddenSR("ADD " .. ITEM_LINK .. " x3", "Member", true)
+            assert.are.equal(3, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("relays a registration failure as an error reply", function()
+            SR.locked = true
+            SR:HandleHiddenSR("ADD " .. ITEM_LINK, "Member", true)
+            assert.matches("Помилка:", lastWhisperTo("Member"))
+        end)
+    end)
+
+    describe("HandleSystemMsg / ProcessRoll integration", function()
+        before_each(function()
+            SR.activeRollItem = 49978
+        end)
+
+        it("does nothing when there's no active roll item", function()
+            SR.activeRollItem = nil
+            SR:HandleSystemMsg("Member rolls 55 (1-100)")
+            assert.same({}, SR.activeRolls)
+        end)
+
+        it("parses the English 'rolls' pattern", function()
+            SR:HandleSystemMsg("Member rolls 55 (1-100)")
+            assert.same({ 55 }, SR.activeRolls["Member"])
+        end)
+
+        it("parses the Ukrainian 'викидає' pattern", function()
+            SR:HandleSystemMsg("Member викидає 42 (1-100)")
+            assert.same({ 42 }, SR.activeRolls["Member"])
+        end)
+
+        it("parses the Russian 'выбрасывает' pattern", function()
+            SR:HandleSystemMsg("Member выбрасывает 10 (1-100)")
+            assert.same({ 10 }, SR.activeRolls["Member"])
+        end)
+
+        it("ignores a roll that isn't out of 1-100", function()
+            SR:HandleSystemMsg("Member rolls 25 (1-50)")
+            assert.is_nil(SR.activeRolls["Member"])
+        end)
+    end)
 end)

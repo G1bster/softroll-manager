@@ -85,12 +85,18 @@ function M.install()
 
     _G.UnitName = function(unit)
         if unit == "player" then return M.state.playerName end
+        local idx = tonumber(unit:match("^party(%d+)$"))
+        if idx then return M.state.party[idx] end
         return nil
     end
 
     _G.UnitClass = function(_unit) return M.state.playerClass, M.state.playerClass end
     _G.UnitLevel = function(_unit) return M.state.playerLevel end
-    _G.UnitExists = function(_unit) return false end
+    _G.UnitExists = function(unit)
+        if unit == "player" then return true end
+        local idx = tonumber(unit:match("^party(%d+)$"))
+        return idx ~= nil and M.state.party[idx] ~= nil
+    end
     _G.UnitIsConnected = function(_unit) return true end
 
     _G.IsRaidLeader  = function() return M.state.isRaidLeader end

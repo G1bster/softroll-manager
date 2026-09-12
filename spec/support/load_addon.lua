@@ -40,6 +40,7 @@ function M.load()
     -- глобальну таблицю щоразу, тож попередній стан не протікає між тестами.
     dofile(ROOT .. "/Core.lua")
     dofile(ROOT .. "/Comms.lua")
+    dofile(ROOT .. "/LootData.lua")
     dofile(ROOT .. "/ChatParser.lua")
 
     local SR = SoftRoll
