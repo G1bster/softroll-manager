@@ -79,6 +79,35 @@ describe("SR session authority and message-sender validation (Comms.lua)", funct
             SR:OnSessionStart("SomeoneElse", "Leader")
             assert.are.equal("Leader", SR.sessionHost)
         end)
+
+        it("a re-announcement from the already-known active host does not trigger a resync", function()
+            -- This is exactly what happens when the host's game crashes and they
+            -- relog: their own client re-broadcasts "S|host" (thinking it's
+            -- starting fresh), but every other client already knew this host was
+            -- active. Re-syncing here used to wipe everyone's local SR list the
+            -- moment the (possibly now-empty, post-crash) host replied.
+            wow.addRaidMember("Leader", 2)
+            SR:OnSessionStart("Leader", "Leader") -- first, genuine start: fires RequestSessionSync
+            local sentBefore = #wow.state.sentAddon
+
+            SR:OnSessionStart("Leader", "Leader") -- host re-announces after a reload
+
+            assert.are.equal(sentBefore, #wow.state.sentAddon) -- no new 'Q' sent
+        end)
+
+        it("a session start from a genuinely different host still triggers a resync", function()
+            wow.addRaidMember("OldLeader", 2)
+            SR:OnSessionStart("OldLeader", "OldLeader")
+            wow.addRaidMember("NewLeader", 2)
+
+            SR:OnSessionStart("NewLeader", "NewLeader")
+
+            local msgs = {}
+            for _, m in ipairs(wow.state.sentAddon) do
+                if m.msg == "Q" and m.target == "NewLeader" then msgs[#msgs + 1] = m end
+            end
+            assert.are.equal(1, #msgs)
+        end)
     end)
 
     describe("OnSessionEnd (E|hostName message)", function()

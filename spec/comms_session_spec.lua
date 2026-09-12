@@ -301,17 +301,47 @@ describe("SR session lifecycle, sync protocol, and co-host broadcast (Comms.lua)
             SR:InitItemCache()
         end)
 
-        it("RequestSessionSync (client) wipes local reserves and whispers Q to the host", function()
+        it("RequestSessionSync (client) does NOT wipe local reserves up front — it's a diff sync", function()
+            -- Local data must survive the moment between sending Q and getting a
+            -- reply; it's only pruned in OnSyncComplete, based on what the host
+            -- actually confirms (see the diff-sync tests below).
             SR.db.reserves["Stale"] = { { itemID = 1, count = 1 } }
             SR.sessionHost = "Leader"
 
             SR:RequestSessionSync()
 
-            assert.is_nil(SR.db.reserves["Stale"])
+            assert.is_not_nil(SR.db.reserves["Stale"])
             assert.is_true(SR._syncPending)
             local msg = lastAddonMsg()
             assert.are.equal("Q", msg.msg)
             assert.are.equal("Leader", msg.target)
+        end)
+
+        it("diff sync: a full Q...Z round replaces the local list with exactly what the host confirms", function()
+            SR.db.reserves["StalePlayer"] = { { itemID = 999, count = 1 } } -- host won't mention this one
+            SR.sessionHost = "Leader"
+
+            SR:RequestSessionSync()
+            SR:OnSyncPlayer("KeptPlayer|TANK|49978:2")
+            SR:OnSyncComplete()
+
+            assert.is_nil(SR.db.reserves["StalePlayer"]) -- pruned: host never confirmed it
+            assert.is_not_nil(SR.db.reserves["KeptPlayer"]) -- host did confirm it
+        end)
+
+        it("diff sync: a player the host explicitly reports as empty is still 'seen' and not left dangling", function()
+            SR.sessionHost = "Leader"
+            SR:RequestSessionSync()
+            SR:OnSyncPlayer("SomePlayer|DPS|") -- host confirms: this player currently has zero SR
+            SR:OnSyncComplete()
+            assert.is_nil(SR.db.reserves["SomePlayer"])
+        end)
+
+        it("diff sync: local data isn't touched at all if the host's reply never arrives (Z never comes)", function()
+            SR.db.reserves["StillHere"] = { { itemID = 1, count = 1 } }
+            SR.sessionHost = "Leader"
+            SR:RequestSessionSync()
+            assert.is_not_nil(SR.db.reserves["StillHere"])
         end)
 
         it("OnSyncRequest (host) replies with instance, co-hosts, overrides, per-player reserves, then Z", function()

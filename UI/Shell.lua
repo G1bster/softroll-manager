@@ -283,6 +283,10 @@ function SR:CreateUI()
     -- Побудова вікна редагування софтів гравця (прихованого)
     self:BuildEditPlayerPopup()
 
+    -- Побудова попапів відновлення даних хоста з рейду (прихованих)
+    self:BuildDataLossPopup()
+    self:BuildRecoveryPopup()
+
     -- Відкриття панелі керування за замовчуванням
     self:SelectTab(1)
 end

@@ -14,9 +14,22 @@
 --    A|itemID|count          Запит клієнта на реєстрацію SR
 --    K|1|text  /  K|0|text    Відповідь хоста (1=ок, 0=помилка)
 --    Q                       Запит клієнта на повну синхронізацію резервів
---    Y|player|id:c,id:c      Частина синхронізації від хоста (один гравець)
---    Z                       Синхронізацію від хоста завершено
+--    Y|player|role|id:c,id:c Частина синхронізації від хоста (один гравець).
+--                            Клієнт НЕ стирає свої резерви заздалегідь — кожен
+--                            згаданий у поточному раунді (Q…Z) гравець
+--                            запамʼятовується, а після Z видаляються лише ті,
+--                            кого хост жодного разу не згадав (diff-синхронізація,
+--                            без миттєвого "все зникло" між Q і Z).
+--    Z                       Синхронізацію від хоста завершено (і межа раунду diff)
 --    H                       Привітання клієнта — хост повторно анонсує сесію, якщо вона активна
+--
+--  ВІДНОВЛЕННЯ ДАНИХ ХОСТА З РЕЙДУ (напр. після краху хоста):
+--    RP                      Хост → рейд: "хто має кешовані резерви?"
+--    RA|name|count           Відповідь клієнта з кешем: скільки гравців у нього закешовано
+--    RQ                      Хост → обраний клієнт: "надішли свою копію"
+--    RY|player|role|id:c,.. Одна запис відновлення (той самий формат, що й Y,
+--                            але окрема команда, щоб не змішувати з живою sync)
+--    RZ                      Відновлення від цього клієнта завершено
 --------------------------------------------------------------
 
 local SR = SoftRoll
@@ -175,6 +188,9 @@ function SR:StartSession()
 
     self:Print("Сесію SR |cff44ff44РОЗПОЧАТО|r — ви активний хост.")
     self:RefreshSessionUI()
+    if self:ShouldPromptDataRecovery() and self.ShowDataRecoveryPrompt then
+        self:ShowDataRecoveryPrompt()
+    end
 end
 
 --- Автоматичний старт сесії при вході в рейд — починає із заблокованими софтами.
@@ -201,6 +217,9 @@ function SR:AutoStartSession()
 
     self:Print("Сесію SR |cff44ff44авто-розпочато|r. Реєстрації |cffff4444ЗАБЛОКОВАНІ|r — розблокуйте коли готові.")
     self:RefreshSessionUI()
+    if self:ShouldPromptDataRecovery() and self.ShowDataRecoveryPrompt then
+        self:ShowDataRecoveryPrompt()
+    end
 end
 
 function SR:EndSession()
@@ -328,6 +347,16 @@ function SR:OnAddonMessage(message, channel, sender)
         end
     elseif cmd == "T" then
         self:OnLockChangeRequest(rest, senderName)
+    elseif cmd == "RP" then
+        self:OnRecoveryPing(senderName)
+    elseif cmd == "RA" then
+        self:OnRecoveryAck(rest, senderName)
+    elseif cmd == "RQ" then
+        self:OnRecoveryQuery(senderName)
+    elseif cmd == "RY" then
+        self:OnRecoveryData(rest, senderName)
+    elseif cmd == "RZ" then
+        self:OnRecoveryComplete(senderName)
     end
 end
 
@@ -398,13 +427,18 @@ function SR:OnSessionStart(_hostName, senderName)
     if not senderName then return end
     if not self:PlayerHasLeaderAuthority(senderName) then return end
 
+    -- Якщо цей хост і так уже вважався активним локально, це просто повторне
+    -- оголошення (напр. хост перезавантажив гру/перепідключився), а не справді
+    -- нова сесія — не варто перезапитувати повну синхронізацію в такому разі.
+    local alreadyKnownActive = (self.sessionActive and self.sessionHost == senderName)
+
     self.sessionActive = true
     self.sessionHost   = senderName
 
     if senderName == self:GetLocalPlayerName() then
         self:Print("Ви хост сесії SR.")
         self:BroadcastCoHosts()
-    else
+    elseif not alreadyKnownActive then
         self:Print("Сесію SR розпочато — хост: |cffffcc00" .. senderName .. "|r.")
         -- Отримуємо дані про резерви від хоста для перегляду
         self:RequestSessionSync(senderName)
@@ -464,17 +498,16 @@ function SR:OnHello(senderName)
 end
 
 --- Запит до хоста на знімок резервів (для офіцерів з правами на читання / гравців, що приєдналися пізніше).
+-- Локальні резерви НЕ стираються заздалегідь — це diff-синхронізація: кожен
+-- гравець, згаданий хостом у відповіді (Y), запамʼятовується, а після Z
+-- видаляються лише ті, кого хост жодного разу не підтвердив у цьому раунді
+-- (див. OnSyncPlayer / OnSyncComplete). Так локальні дані не зникають навіть
+-- на мить, якщо цей запит спричинений, наприклад, гонкою чи повторним "S|".
 function SR:RequestSessionSync(hostName)
     hostName = hostName or self.sessionHost
     if not hostName then return end
     self._syncPending = true
-    
-    -- Очищаємо локальні резерви клієнта перед отриманням повного списку від хоста, 
-    -- щоб не залишилось "старих" софтів (наприклад, якщо хост видалив їх, поки клієнт був офлайн).
-    if not self:IsSessionHost() then
-        wipe(self.db.reserves)
-    end
-    
+
     self:SendAddonMsg("Q", "WHISPER", hostName)
 end
 
@@ -519,10 +552,16 @@ function SR:OnSyncPlayer(data)
     if self:IsSessionHost() then return end -- хост локально має пріоритет
 
     local pName, role, itemStr = data:match("^([^|]+)|([^|]+)|(.*)$")
-    if not pName then 
+    if not pName then
         pName, itemStr = data:match("^([^|]+)|(.*)$")
     end
     if not pName then return end
+
+    -- Diff-синхронізація: запамʼятовуємо, кого хост підтвердив у цьому раунді
+    -- (між Q і Z), щоб після Z прибрати лише тих, кого хост НЕ згадав, а не
+    -- стирати все наперед (див. RequestSessionSync / OnSyncComplete).
+    self._syncSeenPlayers = self._syncSeenPlayers or {}
+    self._syncSeenPlayers[pName] = true
 
     if role and self.db.roles then
         self.db.roles[pName] = role
@@ -563,6 +602,17 @@ function SR:OnSyncPlayer(data)
 end
 
 function SR:OnSyncComplete()
+    -- Прибираємо локально лише тих гравців, кого хост жодного разу не
+    -- підтвердив у цьому раунді синхронізації (Q…Z) — тобто діагностуємо
+    -- різницю (diff), а не стираємо все на самому початку.
+    local seen = self._syncSeenPlayers or {}
+    for pName in pairs(self.db.reserves) do
+        if not seen[pName] then
+            self.db.reserves[pName] = nil
+        end
+    end
+    self._syncSeenPlayers = {}
+
     self._syncPending = false
     self:Print("Синхронізацію завершено.")
     self:RefreshSessionUI()
@@ -931,4 +981,139 @@ function SR:AnnounceHello()
     if self:GetAddonChannel() then
         self:SendAddonMsg("H", "RAID") -- SendAddonMsg will automatically map "RAID" to "PARTY" if needed
     end
+end
+
+--------------------------------------------------------------
+-- ВІДНОВЛЕННЯ ДАНИХ ХОСТА З РЕЙДУ
+-- Кожен клієнт з аддоном, синхронізований у сесії, тримає в себе копію
+-- db.reserves всього рейду (бо хост розсилає кожну зміну через Y|... в RAID).
+-- Якщо хост втратив свою локальну копію (напр. SavedVariables не встигли
+-- записатись на диск при краші), можна попросити конкретного гравця з
+-- аддоном переслати те, що закешовано в нього — це відновить дані навіть
+-- для тих, хто реєструвався через чат-команди, а не UI.
+--------------------------------------------------------------
+
+--- Евристика: чи схоже, що резерви хоста могли загубитись. Неточно (може
+-- бути й справді щойно початий рейд), тому лише ПРОПОНУЄ відновлення —
+-- ніколи не стирає й не змінює дані сама.
+function SR:ShouldPromptDataRecovery()
+    if self._dataLossPromptDismissed then return false end
+    if next(self.db.reserves) then return false end
+    return #self:GetRaidMembers() > 1
+end
+
+--- Хост розсилає "пінг" у рейд: хто має закешовані резерви?
+function SR:StartRecoveryScan()
+    if not self:IsSessionHost() then return end
+    self._recoveryResponses = {}
+    self:SendAddonMsg("RP", "RAID")
+end
+
+--- Відповідь на пінг: якщо в нас є закешовані резерви, повідомляємо хосту
+-- скільки гравців у них закешовано (щоб хост міг обрати найповнішу копію).
+-- Довіряємо лише поточному хосту (або, якщо сесія ще не зафіксована,
+-- реальному лідеру рейду/паті) — так само, як і в OnWipeAll.
+function SR:OnRecoveryPing(senderName)
+    if self.sessionHost then
+        if senderName ~= self.sessionHost then return end
+    elseif not self:PlayerHasLeaderAuthority(senderName) then
+        return
+    end
+
+    local count = 0
+    for _, list in pairs(self.db.reserves) do
+        if list and #list > 0 then count = count + 1 end
+    end
+    if count == 0 then return end
+
+    self:SendAddonMsg("RA|" .. self:GetLocalPlayerName() .. "|" .. count, "WHISPER", senderName)
+end
+
+--- Хост збирає відповіді на пінг (для показу списку у попапі вибору джерела).
+function SR:OnRecoveryAck(data, senderName)
+    if not self:IsSessionHost() then return end
+    if not self._recoveryResponses then return end -- сканування не запущено
+
+    local name, count = data:match("^([^|]+)|(%d+)$")
+    count = tonumber(count)
+    if not name or not count then return end
+
+    self._recoveryResponses[senderName] = { name = name, count = count }
+    if self.UpdateRecoveryPopup then self:UpdateRecoveryPopup() end
+end
+
+--- Хост явно обирає конкретного гравця і просить у нього повну копію.
+function SR:RequestRecoveryFrom(targetName)
+    if not self:IsSessionHost() then return end
+    if not targetName then return end
+
+    self._recoveryPending = true
+    self._recoveryFrom    = targetName
+    self._recoveryData    = {}
+    self:SendAddonMsg("RQ", "WHISPER", targetName)
+end
+
+--- Відповідаємо на запит відновлення, лише якщо він справді від поточного
+-- хоста — інакше будь-хто міг би виманити повний список чужих резервів.
+function SR:OnRecoveryQuery(senderName)
+    if senderName ~= self.sessionHost then return end
+
+    for pName, list in pairs(self.db.reserves) do
+        if list and #list > 0 then
+            local parts = {}
+            for _, e in ipairs(list) do
+                parts[#parts + 1] = (e.itemID or 0) .. ":" .. (e.count or 1)
+            end
+            local role = self:GetPlayerRole(pName)
+            self:SendAddonMsg("RY|" .. pName .. "|" .. role .. "|" .. table.concat(parts, ","), "WHISPER", senderName)
+        end
+    end
+    self:SendAddonMsg("RZ", "WHISPER", senderName)
+end
+
+--- Хост приймає один запис відновлення. Приймаємо дані лише від того самого
+-- гравця, кого ми самі обрали й запитали — інакше хтось інший міг би
+-- підсунути хосту довільні "відновлені" резерви.
+function SR:OnRecoveryData(data, senderName)
+    if not self._recoveryPending then return end
+    if senderName ~= self._recoveryFrom then return end
+
+    local pName, role, itemStr = data:match("^([^|]+)|([^|]+)|(.*)$")
+    if not pName then return end
+
+    local list = {}
+    for chunk in (itemStr or ""):gmatch("[^,]+") do
+        local id, cnt = chunk:match("^(%d+):(%d+)$")
+        id, cnt = tonumber(id), tonumber(cnt)
+        if id then
+            list[#list + 1] = { itemID = id, itemLink = self:GetSafeItemLink(id, nil), count = cnt or 1 }
+        end
+    end
+
+    self._recoveryData[pName] = { role = role, list = list }
+end
+
+--- Завершення відновлення: перезбираємо db.reserves з отриманого і розсилаємо
+-- всьому рейду свіжий стан, щоб усі знову бачили однакові дані.
+function SR:OnRecoveryComplete(senderName)
+    if not self._recoveryPending then return end
+    if senderName ~= self._recoveryFrom then return end
+
+    local n = 0
+    for pName, entry in pairs(self._recoveryData or {}) do
+        self.db.reserves[pName] = entry.list
+        if entry.role and self.db.roles then
+            self.db.roles[pName] = entry.role
+        end
+        n = n + 1
+    end
+
+    self._recoveryPending = false
+    self._recoveryFrom    = nil
+    self._recoveryData    = nil
+
+    self:Print("Відновлено софт-роли для |cff44ff44" .. n .. "|r гравців із копії |cffffcc00" .. (senderName or "?") .. "|r.")
+    self:RefreshSessionUI()
+    self:BroadcastFullSync()
+    if self.HideRecoveryPopup then self:HideRecoveryPopup() end
 end
