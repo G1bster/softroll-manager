@@ -697,4 +697,71 @@ describe("SR remote SR-management protocol: requests, replies, co-host commands 
             assert.are.equal("ICC", SR.db.instance)
         end)
     end)
+
+    describe("Malformed Network Packets & Edge Cases", function()
+        before_each(function()
+            wow.addRaidMember("TestPlayer", 2)
+            wow.addRaidMember("CoHost", 1)
+            wow.addRaidMember("Member", 0)
+            wow.state.isRaidLeader = true
+            SR:StartSession()
+            SR.locked = false
+            SR.sessionLocked = false
+            SR.db.coHosts["CoHost"] = true
+        end)
+
+        it("OnAddonMessage safely ignores empty or nil messages", function()
+            assert.has_no.errors(function()
+                SR:OnAddonMessage(nil, "RAID", "Member")
+                SR:OnAddonMessage("", "RAID", "Member")
+            end)
+        end)
+
+        it("OnSRAddRequest handles malformed data gracefully", function()
+            assert.has_no.errors(function()
+                SR:OnSRAddRequest("", "Member")
+                SR:OnSRAddRequest("invalid", "Member")
+                SR:OnSRAddRequest("|bad|data", "Member")
+            end)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("OnSRAddRequest accepts itemID without count as count=1", function()
+            SR:OnSRAddRequest("49978", "Member")
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("OnSRManageRequest strips realm and handles single itemID", function()
+            SR:OnSRManageRequest("Member-Icecrown|49978", "CoHost")
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("OnSRRemoveRequest handles cross-realm names and itemLink", function()
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR:OnSRRemoveRequest("Member-Icecrown|49978", "CoHost")
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("OnSRClearRequest handles cross-realm names", function()
+            SR:AddSR("Member", ITEM_LINK, 2)
+            SR:OnSRClearRequest("Member-Icecrown", "CoHost")
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("ProcessSRRegistration rejects empty or nil senderName", function()
+            local ok, err = SR:ProcessSRRegistration(nil, ITEM_LINK, 1)
+            assert.is_false(ok)
+            assert.matches("Невідомий гравець", err)
+
+            local ok2, err2 = SR:ProcessSRRegistration("", ITEM_LINK, 1)
+            assert.is_false(ok2)
+            assert.matches("Невідомий гравець", err2)
+        end)
+
+        it("ProcessSRRegistration handles cross-realm senderName", function()
+            local ok = SR:ProcessSRRegistration("Member-Icecrown", ITEM_LINK, 1)
+            assert.is_true(ok)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+    end)
 end)

@@ -117,17 +117,27 @@ function SR:HandleIncoming(msg, sender, isWhisper)
     local argsLower = args:lower()
 
     -- Підкоманди
-    if argsLower == "" or argsLower == "help" then
+    local isHelpCmd = (argsLower == "" or argsLower == "help" or argsLower == "допомога" or argsLower == "хелп" or argsLower == "?")
+    if isHelpCmd then
         self:Reply(sender, isWhisper, self.L.WHISPER_HELP)
         return
     end
 
-    if argsLower == "list" then
+    local isListCmd = (argsLower == "list" or argsLower == "список" or argsLower == "лист" or argsLower == "софти")
+    if isListCmd then
         self:CmdList(sender, isWhisper)
         return
     end
 
-    if argsLower == "clear" or argsLower:match("^clear%s+") then
+    local isClearCmd = (argsLower == "clear" or argsLower:match("^clear%s*")
+                     or argsLower == "remove" or argsLower:match("^remove%s*")
+                     or argsLower == "del" or argsLower:match("^del%s*")
+                     or argsLower == "delete" or argsLower:match("^delete%s*")
+                     or argsLower == "очистити" or argsLower:match("^очистити%s*")
+                     or argsLower == "видалити" or argsLower:match("^видалити%s*")
+                     or argsLower == "відміна" or argsLower:match("^відміна%s*")
+                     or argsLower == "скинути" or argsLower:match("^скинути%s*"))
+    if isClearCmd then
         self:CmdClear(args, sender, isWhisper)
         return
     end
@@ -153,8 +163,14 @@ function SR:HandleHiddenSR(args, sender, isWhisper)
         return
     end
 
-    local mul = rest:match("[x\209\133](%d+)")
+    local mul = rest:match("[xX]%s*(%d+)")
+             or rest:match("\209\133%s*(%d+)")
+             or rest:match("\208\165%s*(%d+)")
+             or rest:match("(%d+)%s*[xX]")
+             or rest:match("(%d+)%s*\209\133")
+             or rest:match("(%d+)%s*\208\165")
     local count = mul and tonumber(mul) or 1
+    if count < 1 then count = 1 end
     local cx = (count > 1) and (" x" .. count) or ""
 
     local ok, err = self:ProcessSRRegistration(sender, itemLink, count, true)
@@ -214,9 +230,21 @@ function SR:CmdClear(args, sender, isWhisper)
 
     local senderCanEdit = (sender == self.sessionHost or sender == self:GetLocalPlayerName() or self:IsCoHost(sender))
     local targetPlayer = sender
-    local remaining = args:gsub("(|c%x+|Hitem:.-%|h%[.-%]|h|r)", "")
-    remaining = remaining:gsub("^clear%s*", "")
+    local itemLink = args:match("(|c%x+|Hitem:.-%|h%[.-%]|h|r)")
+    local remaining = args
+    if itemLink then
+        remaining = remaining:gsub("(|c%x+|Hitem:.-%|h%[.-%]|h|r)", "")
+    end
+    remaining = remaining:gsub("^%s*clear%s*", "")
+    remaining = remaining:gsub("^%s*remove%s*", "")
+    remaining = remaining:gsub("^%s*del%s*", "")
+    remaining = remaining:gsub("^%s*delete%s*", "")
+    remaining = remaining:gsub("^%s*очистити%s*", "")
+    remaining = remaining:gsub("^%s*видалити%s*", "")
+    remaining = remaining:gsub("^%s*відміна%s*", "")
+    remaining = remaining:gsub("^%s*скинути%s*", "")
     remaining = strtrim(remaining)
+
     local possibleTarget = remaining:match("^(%S+)")
     if possibleTarget and possibleTarget ~= "" then
         if senderCanEdit then
@@ -334,13 +362,23 @@ function SR:CmdRegister(args, sender, isWhisper)
         return
     end
 
-    local mul = args:match("[x\209\133](%d+)")
+    local mul = args:match("[xX]%s*(%d+)")
+             or args:match("\209\133%s*(%d+)")
+             or args:match("\208\165%s*(%d+)")
+             or args:match("(%d+)%s*[xX]")
+             or args:match("(%d+)%s*\209\133")
+             or args:match("(%d+)%s*\208\165")
     local count = mul and tonumber(mul) or 1
     if count < 1 then count = 1 end
 
     local targetPlayer = sender
     local remainingArgs = args:gsub("(|c%x+|Hitem:.-%|h%[.-%]|h|r)", "")
-    remainingArgs = remainingArgs:gsub("[x\209\133]%d+", "")
+    remainingArgs = remainingArgs:gsub("[xX]%s*%d+", "")
+    remainingArgs = remainingArgs:gsub("\209\133%s*%d+", "")
+    remainingArgs = remainingArgs:gsub("\208\165%s*%d+", "")
+    remainingArgs = remainingArgs:gsub("%d+%s*[xX]", "")
+    remainingArgs = remainingArgs:gsub("%d+%s*\209\133", "")
+    remainingArgs = remainingArgs:gsub("%d+%s*\208\165", "")
     remainingArgs = strtrim(remainingArgs)
     local possibleName = remainingArgs:match("^(%S+)")
     

@@ -294,5 +294,96 @@ describe("SR chat command parsing (ChatParser.lua)", function()
             SR:HandleIncoming("sr " .. ITEM_LINK, "Member-RealmName", false)
             assert.are.equal(1, SR:GetUsedSRCount("Member"))
         end)
+
+        it("parses multiplier with space 'sr [link] x 2'", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " x 2", "Member", false)
+            assert.are.equal(2, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("parses Cyrillic lowercase multiplier 'sr [link] х2'", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " х2", "Member", false)
+            assert.are.equal(2, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("parses Cyrillic uppercase multiplier 'sr [link] Х2'", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " Х2", "Member", false)
+            assert.are.equal(2, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("parses leading multiplier 'sr 2x [link]'", function()
+            SR:HandleIncoming("sr 2x " .. ITEM_LINK, "Member", false)
+            assert.are.equal(2, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("parses leading Cyrillic multiplier 'sr 2х [link]'", function()
+            SR:HandleIncoming("sr 2х " .. ITEM_LINK, "Member", false)
+            assert.are.equal(2, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("recognizes Cyrillic list aliases 'список', 'лист', 'софти'", function()
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR:HandleIncoming("sr список", "Member", false)
+            assert.is_true(anyWhisperTo("Member", "Ваші софт%-роли"))
+
+            SR:HandleIncoming("sr лист", "Member", false)
+            assert.is_true(anyWhisperTo("Member", "Ваші софт%-роли"))
+
+            SR:HandleIncoming("sr софти", "Member", false)
+            assert.is_true(anyWhisperTo("Member", "Ваші софт%-роли"))
+        end)
+
+        it("recognizes removal aliases 'видалити [link]', 'очистити [link]', 'remove [link]'", function()
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR:HandleIncoming("sr видалити " .. ITEM_LINK, "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR:HandleIncoming("sr очистити " .. ITEM_LINK, "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR:HandleIncoming("sr remove " .. ITEM_LINK, "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("recognizes full clear aliases without links 'sr очистити', 'sr видалити'", function()
+            SR:AddSR("Member", ITEM_LINK, 2)
+            SR:HandleIncoming("sr очистити", "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+
+            SR:AddSR("Member", ITEM_LINK, 2)
+            SR:HandleIncoming("sr видалити", "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("recognizes help aliases 'sr допомога', 'sr ?'", function()
+            SR:HandleIncoming("sr допомога", "Member", false)
+            assert.matches("Довідка", lastWhisperTo("Member"))
+
+            SR:HandleIncoming("sr ?", "Member", false)
+            assert.matches("Довідка", lastWhisperTo("Member"))
+        end)
+
+        it("handles shift-clicks without spaces 'sr[link]', '!sr[link]', 'ср[link]', '!ср[link]'", function()
+            SR:HandleIncoming("sr" .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+
+            SR:ClearPlayerSR("Member")
+            SR:HandleIncoming("!sr" .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+
+            SR:ClearPlayerSR("Member")
+            SR:HandleIncoming("ср" .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+
+            SR:ClearPlayerSR("Member")
+            SR:HandleIncoming("!ср" .. ITEM_LINK, "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
+
+        it("clamps zero multiplier 'sr [link] x0' to 1", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " x0", "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+        end)
     end)
 end)

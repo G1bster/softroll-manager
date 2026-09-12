@@ -462,7 +462,8 @@ end
 -- 8. КЕРУВАННЯ РОЛЯМИ
 --------------------------------------------------------------
 function SR:GetPlayerRole(name)
-    if not name then return "DPS" end
+    if not name or name == "" then return "DPS" end
+    if self.StripRealm then name = self:StripRealm(name) end
     if self.db and self.db.roles and self.db.roles[name] then
         return self.db.roles[name]
     end
@@ -470,6 +471,9 @@ function SR:GetPlayerRole(name)
 end
 
 function SR:SetPlayerRole(name, role)
+    if not name or name == "" then return end
+    if self.StripRealm then name = self:StripRealm(name) end
+    if not self.ROLE_LABELS[role] then role = "DPS" end
     if self.sessionActive and not self:IsSessionHost() then
         if self:CanEditSession() then
             self:SendAddonMsg("V|" .. name .. "|" .. role, "WHISPER", self.sessionHost)
@@ -495,15 +499,16 @@ end
 --- Повертає дійсний ліміт SR для гравця.
 -- Спочатку перевіряє персональні перевизначення, потім спирається на роль/режим/підземелля.
 function SR:GetSRLimit(name)
-    -- Персональне перевизначення має пріоритет
-    local override = self.db.playerOverrides[name]
+    if not name or name == "" then return 3 end
+    if self.StripRealm then name = self:StripRealm(name) end
+    local override = self.db and self.db.playerOverrides and self.db.playerOverrides[name]
     if override and override > 0 then
         return override
     end
 
     local role    = self:GetPlayerRole(name)
-    local inst    = self.db.instance or "ICC"
-    local mode    = self.db.srMode or "classic"
+    local inst    = (self.db and self.db.instance) or "ICC"
+    local mode    = (self.db and self.db.srMode) or "classic"
     local modeDef = self.SR_MODE_DEFS[mode]
 
     if modeDef and modeDef[inst] and modeDef[inst][role] then
@@ -514,9 +519,11 @@ end
 
 --- Повертає "базовий" ліміт (без перевизначень) для відображення.
 function SR:GetBaseSRLimit(name)
+    if not name or name == "" then return 3 end
+    if self.StripRealm then name = self:StripRealm(name) end
     local role    = self:GetPlayerRole(name)
-    local inst    = self.db.instance or "ICC"
-    local mode    = self.db.srMode or "classic"
+    local inst    = (self.db and self.db.instance) or "ICC"
+    local mode    = (self.db and self.db.srMode) or "classic"
     local modeDef = self.SR_MODE_DEFS[mode]
     if modeDef and modeDef[inst] and modeDef[inst][role] then
         return modeDef[inst][role]
@@ -525,7 +532,9 @@ function SR:GetBaseSRLimit(name)
 end
 
 function SR:GetUsedSRCount(name)
-    local list = self.db.reserves[name]
+    if not name or name == "" then return 0 end
+    if self.StripRealm then name = self:StripRealm(name) end
+    local list = self.db and self.db.reserves and self.db.reserves[name]
     if not list then return 0 end
     local t = 0
     for _, e in ipairs(list) do t = t + (e.count or 1) end
@@ -533,7 +542,9 @@ function SR:GetUsedSRCount(name)
 end
 
 function SR:GetRemainingSR(name)
-    return self:GetSRLimit(name) - self:GetUsedSRCount(name)
+    if not name or name == "" then return 0 end
+    if self.StripRealm then name = self:StripRealm(name) end
+    return math.max(0, self:GetSRLimit(name) - self:GetUsedSRCount(name))
 end
 
 --------------------------------------------------------------
@@ -543,6 +554,9 @@ end
 --- Встановлює спеціальний ліміт SR для певного гравця (наприклад, для тих, хто приєднався пізніше).
 -- Передайте nil або 0, щоб скасувати перевизначення.
 function SR:SetPlayerOverride(name, maxSRs)
+    if not name or name == "" then return end
+    if self.StripRealm then name = self:StripRealm(name) end
+    maxSRs = tonumber(maxSRs)
     if self.sessionActive and not self:IsSessionHost() then
         if self:CanEditSession() then
             self:SendAddonMsg("U|" .. name .. "|" .. (maxSRs or 0), "WHISPER", self.sessionHost)
@@ -566,11 +580,15 @@ function SR:SetPlayerOverride(name, maxSRs)
 end
 
 function SR:GetPlayerOverride(name)
-    return self.db.playerOverrides[name]
+    if not name or name == "" then return nil end
+    if self.StripRealm then name = self:StripRealm(name) end
+    return self.db and self.db.playerOverrides and self.db.playerOverrides[name]
 end
 
 function SR:HasOverride(name)
-    return self.db.playerOverrides[name] ~= nil
+    if not name or name == "" then return false end
+    if self.StripRealm then name = self:StripRealm(name) end
+    return self.db and self.db.playerOverrides and self.db.playerOverrides[name] ~= nil
 end
 
 --------------------------------------------------------------
@@ -580,7 +598,12 @@ end
 --- Реєструє 'count' кількість SR на 'itemLink' для гравця 'playerName'.
 -- @return успішність (bool), повідомлення про помилку (string|nil)
 function SR:AddSR(playerName, itemLink, count, isSet)
-    count = count or 1
+    if not playerName or playerName == "" then
+        return false, "Невідомий гравець."
+    end
+    if self.StripRealm then playerName = self:StripRealm(playerName) end
+    count = math.floor(tonumber(count) or 1)
+    if count < 1 then count = 1 end
 
     if self.sessionActive and not self:IsSessionHost() then
         return false, "Сесію створено гравцем " .. (self.sessionHost or "кимсь іншим") .. "."
@@ -639,6 +662,8 @@ function SR:AddSR(playerName, itemLink, count, isSet)
 end
 
 function SR:CanEditPlayerSR(playerName)
+    if not playerName or playerName == "" then return false end
+    if self.StripRealm then playerName = self:StripRealm(playerName) end
     if self:CanEditSession() then return true end
     if playerName == self:GetLocalPlayerName() then
         if self.locked or self.sessionLocked then return false end
@@ -648,13 +673,19 @@ function SR:CanEditPlayerSR(playerName)
 end
 
 function SR:RemoveSR(playerName, itemID)
+    if not playerName or playerName == "" then return false end
+    if self.StripRealm then playerName = self:StripRealm(playerName) end
+    if not itemID then return false end
+    local cleanID = tonumber(itemID) or (self.GetItemIDFromLink and self:GetItemIDFromLink(itemID))
+    if not cleanID then return false end
+
     local list = self.db.reserves[playerName]
     if not list then return false end
     
-    local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
+    local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(cleanID) or { [cleanID] = true }
     
     for i, entry in ipairs(list) do
-        if entry.itemID == tonumber(itemID) or eq[entry.itemID] then
+        if entry.itemID == cleanID or eq[entry.itemID] then
             table.remove(list, i)
             if #list == 0 then
                 self.db.reserves[playerName] = nil
@@ -662,7 +693,7 @@ function SR:RemoveSR(playerName, itemID)
             if self:IsSessionHost() or (self:IsSessionLeader() and not self.sessionActive) then
                 self:BroadcastPlayerSync(playerName)
             end
-            self:RefreshSessionUI()
+            if self.RefreshSessionUI then self:RefreshSessionUI() end
             return true
         end
     end
@@ -670,6 +701,8 @@ function SR:RemoveSR(playerName, itemID)
 end
 
 function SR:ClearPlayerSR(playerName)
+    if not playerName or playerName == "" then return end
+    if self.StripRealm then playerName = self:StripRealm(playerName) end
     if self.sessionActive and not self:IsSessionHost() then return end
     self.db.reserves[playerName] = nil
     if self:IsSessionHost() or (self:IsSessionLeader() and not self.sessionActive) then
@@ -880,13 +913,19 @@ end
 
 function SR:GetItemIDFromLink(link)
     if not link then return nil end
+    if type(link) == "number" then return link end
     local id = link:match("item:(%d+)")
-    return id and tonumber(id) or nil
+    if id then return tonumber(id) end
+    if link:match("^%d+$") then return tonumber(link) end
+    return nil
 end
 
 --- Повертає відсортований список гравців, які зарезервували заданий itemID.
 -- Кожен запис: { name, count, role, itemLink }
 function SR:GetPlayersWithSR(itemID)
+    if not itemID then return {} end
+    itemID = tonumber(itemID) or self:GetItemIDFromLink(itemID)
+    if not itemID then return {} end
     local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
     local out = {}
     for pName, list in pairs(self.db.reserves) do

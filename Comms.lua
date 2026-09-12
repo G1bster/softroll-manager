@@ -755,11 +755,20 @@ end
 function SR:OnSRAddRequest(data, senderName)
     -- Тільки Активний Хост обробляє реєстрації
     if not self:IsSessionHost() then return end
+    if not data or data == "" then return end
+    if self.StripRealm then senderName = self:StripRealm(senderName) end
 
     local itemID, count, isSet = data:match("^(%d+)|(%d+)|?(%d*)$")
+    if not itemID then
+        itemID = data:match("^(%d+)$")
+        count = 1
+        isSet = false
+    else
+        itemID = tonumber(itemID)
+        count  = tonumber(count) or 1
+        isSet  = (isSet == "1")
+    end
     itemID = tonumber(itemID)
-    count  = tonumber(count) or 1
-    isSet  = (isSet == "1")
     if not itemID then return end
 
     if not self:IsInRaid(senderName) then
@@ -790,13 +799,23 @@ end
 
 function SR:OnSRManageRequest(data, senderName)
     if not self:IsSessionHost() then return end
+    if not data or data == "" then return end
+    if self.StripRealm then senderName = self:StripRealm(senderName) end
     if not self:IsCoHost(senderName) then return end
 
     local targetPlayer, itemID, count, isSet = data:match("^([^|]+)|(%d+)|(%d+)|?(%d*)$")
+    if not targetPlayer then
+        targetPlayer, itemID = data:match("^([^|]+)|(%d+)$")
+        count = 1
+        isSet = false
+    else
+        itemID = tonumber(itemID)
+        count  = tonumber(count) or 1
+        isSet  = (isSet == "1")
+    end
     itemID = tonumber(itemID)
-    count  = tonumber(count) or 1
-    isSet  = (isSet == "1")
     if not targetPlayer or not itemID then return end
+    if self.StripRealm then targetPlayer = self:StripRealm(targetPlayer) end
 
     local _, link = GetItemInfo(itemID)
     if not link then
@@ -835,6 +854,8 @@ end
 
 function SR:OnSRRemoveRequest(data, senderName)
     if not self:IsSessionHost() then return end
+    if not data or data == "" then return end
+    if self.StripRealm then senderName = self:StripRealm(senderName) end
     
     local targetPlayer, itemID
     if data:find("|") then
@@ -846,6 +867,7 @@ function SR:OnSRRemoveRequest(data, senderName)
     
     itemID = tonumber(itemID)
     if not itemID or not targetPlayer then return end
+    if self.StripRealm then targetPlayer = self:StripRealm(targetPlayer) end
     
     if targetPlayer ~= senderName and not self:IsCoHost(senderName) then
         return -- Неавторизований запит на видалення чужого SR
@@ -877,8 +899,10 @@ end
 
 function SR:OnSRClearRequest(data, senderName)
     if not self:IsSessionHost() then return end
+    if self.StripRealm then senderName = self:StripRealm(senderName) end
     
     local targetPlayer = (data and data ~= "") and data or senderName
+    if self.StripRealm then targetPlayer = self:StripRealm(targetPlayer) end
     
     if targetPlayer ~= senderName and not self:IsCoHost(senderName) then return end
     
@@ -920,6 +944,11 @@ end
 --- Спільна валідація + додавання SR (використовується ChatParser, Comms та інтерфейсом хоста).
 -- @param notifyHost якщо true, хост виводить повідомлення в чат (віддалена реєстрація)
 function SR:ProcessSRRegistration(senderName, itemLink, count, notifyHost, isSet)
+    if not senderName or senderName == "" then
+        return false, "Невідомий гравець."
+    end
+    if self.StripRealm then senderName = self:StripRealm(senderName) end
+
     if self.sessionActive and not self:IsSessionHost() then
         return false, "Хост сесії — " .. (self.sessionHost or "інший гравець") .. "."
     end
@@ -936,7 +965,8 @@ function SR:ProcessSRRegistration(senderName, itemLink, count, notifyHost, isSet
         return false, "Ви не в рейді."
     end
 
-    count = count or 1
+    count = math.floor(tonumber(count) or 1)
+    if count < 1 then count = 1 end
     local limit     = self:GetSRLimit(senderName)
     local used      = self:GetUsedSRCount(senderName)
     local remaining = limit - used
