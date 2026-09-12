@@ -68,6 +68,35 @@ function SR:IsSessionHost()
     return self.sessionHost == self:GetLocalPlayerName()
 end
 
+--- Повертає true, якщо вказаний гравець (не обов'язково локальний) зараз має права
+-- лідера рейду або лідера паті. Використовується для перевірки вхідних "S|hostName"
+-- повідомлень — довіряти можна лише параметру senderName (його підставляє сам клієнт
+-- WoW і підмінити неможливо), а не вмісту повідомлення.
+function SR:PlayerHasLeaderAuthority(name)
+    if not name then return false end
+
+    if GetNumRaidMembers() > 0 then
+        for i = 1, GetNumRaidMembers() do
+            local rName, rank = GetRaidRosterInfo(i)
+            if rName == name then
+                return rank == 2
+            end
+        end
+        return false
+    end
+
+    if GetNumPartyMembers() > 0 then
+        local leaderIndex = GetPartyLeaderIndex and GetPartyLeaderIndex() or 0
+        if leaderIndex == 0 then
+            return name == self:GetLocalPlayerName()
+        end
+        local leaderName = self:StripRealm(GetUnitName("party" .. leaderIndex, true))
+        return name == leaderName
+    end
+
+    return name == self:GetLocalPlayerName()
+end
+
 --- Повертає true, якщо гравець у списку Ко-Хостів і є помічником в рейді.
 function SR:IsCoHost(name)
     if not self.db.coHosts then return false end
@@ -360,35 +389,39 @@ function SR:OnLockChangeRequest(data, senderName)
     end
 end
 
-function SR:OnSessionStart(hostName, senderName)
-    hostName = self:StripRealm(hostName)
-    if not hostName then return end
+--- Обробка вхідного "S|hostName". Заявлене в тексті повідомлення ім'я ігнорується для
+-- авторизації — довіряємо лише senderName (реальний відправник за версією клієнта WoW),
+-- і вимагаємо, щоб він справді був лідером рейду/паті. Інакше будь-який учасник рейду
+-- міг би оголосити себе (або когось іншого) новим хостом сесії.
+function SR:OnSessionStart(_hostName, senderName)
+    if not senderName then return end
+    if not self:PlayerHasLeaderAuthority(senderName) then return end
 
     self.sessionActive = true
-    self.sessionHost   = hostName
+    self.sessionHost   = senderName
 
-    if hostName == self:GetLocalPlayerName() then
+    if senderName == self:GetLocalPlayerName() then
         self:Print("Ви хост сесії SR.")
         self:BroadcastCoHosts()
     else
-        self:Print("Сесію SR розпочато — хост: |cffffcc00" .. hostName .. "|r.")
+        self:Print("Сесію SR розпочато — хост: |cffffcc00" .. senderName .. "|r.")
         -- Отримуємо дані про резерви від хоста для перегляду
-        self:RequestSessionSync(hostName)
+        self:RequestSessionSync(senderName)
     end
     self:RefreshSessionUI()
 end
 
-function SR:OnSessionEnd(hostName, senderName)
-    hostName = self:StripRealm(hostName)
-    if hostName and self.sessionHost and hostName ~= self.sessionHost then
-        return -- ігноруємо застаріле завершення з іншого рейду
-    end
+--- Обробка вхідного "E|hostName". Завершити сесію може лише її поточний хост —
+-- перевіряємо реального відправника (senderName), а не заявлене в тілі повідомлення ім'я,
+-- інакше будь-хто міг би підробити hostName і обірвати чужу сесію.
+function SR:OnSessionEnd(_hostName, senderName)
+    if senderName ~= self.sessionHost then return end
 
     self.sessionActive = false
     self.sessionHost   = nil
     self.sessionLocked = false
 
-    self:Print("Сесію SR завершено" .. (hostName and (" гравцем |cffffcc00" .. hostName .. "|r") or "") .. ".")
+    self:Print("Сесію SR завершено гравцем |cffffcc00" .. senderName .. "|r.")
     self:RefreshSessionUI()
 end
 
