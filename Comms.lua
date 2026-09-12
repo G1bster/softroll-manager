@@ -774,7 +774,6 @@ function SR:OnWipeAll(senderName)
     if self.sessionActive and self.sessionHost and senderName ~= self.sessionHost then return end
     wipe(self.db.reserves)
     wipe(self.db.roles)
-    if self.db.limits then wipe(self.db.limits) end
     self:RefreshSessionUI()
     self:Print("Хост очистив усі софт-роли.")
 end
