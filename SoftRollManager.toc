@@ -10,4 +10,9 @@ Core.lua
 Comms.lua
 LootData.lua
 ChatParser.lua
-UI.lua
+UI/Widgets.lua
+UI/Shell.lua
+UI/Dashboard.lua
+UI/Ledger.lua
+UI/LootBrowser.lua
+UI/LootSession.lua
