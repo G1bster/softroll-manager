@@ -81,7 +81,7 @@ function SR:BuildDashboard(parent)
                 UIDropDownMenu_SetText(modeDD, SR.SR_MODE_LABELS[mode])
                 SR:UpdateDashboard()
                 SR:UpdateLedger()
-                SR:Print("Режим SR змінено на |cffffcc00" .. SR.SR_MODE_LABELS[mode] .. "|r")
+                SR:Print(format(SR.L.PRINT_MODE_CHANGED, SR.SR_MODE_LABELS[mode]))
                 if SR:IsSessionHost() then
                     SR:SendAddonMsg("I|" .. SR.db.instance .. "|" .. SR.db.srMode, "RAID")
                 elseif SR.sessionActive and SR:CanEditSession() then
@@ -105,7 +105,7 @@ function SR:BuildDashboard(parent)
         if SR.sessionActive and not SR:IsSessionHost() then
             if SR:CanEditSession() then
                 SR:SendAddonMsg("T|" .. (newLock and "1" or "0"), "WHISPER", SR.sessionHost)
-                SR:Print("Запит на зміну блокування надіслано хосту...")
+                SR:Print(SR.L.PRINT_LOCK_REQUEST_SENT)
             end
             return
         end
@@ -115,11 +115,11 @@ function SR:BuildDashboard(parent)
         if SR.BroadcastLockState then SR:BroadcastLockState() end
         local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
         if SR.locked then
-            SR:Print("Софт-роли |cffff4444ЗАБЛОКОВАНО|r.")
-            SendChatMessage("Реєстрацію софт-ролів ЗАБЛОКОВАНО.", chatType)
+            SR:Print(SR.L.PRINT_STATUS_LOCKED)
+            SendChatMessage(SR.L.SESSION_LOCKED, chatType)
         else
-            SR:Print("Софт-роли |cff44ff44РОЗБЛОКОВАНО|r.")
-            SendChatMessage("Реєстрацію софт-ролів РОЗБЛОКОВАНО.", chatType)
+            SR:Print(SR.L.PRINT_STATUS_UNLOCKED)
+            SendChatMessage(SR.L.SESSION_UNLOCKED, chatType)
         end
     end)
     self.lockBtn = lockBtn
@@ -161,11 +161,17 @@ function SR:BuildDashboard(parent)
     local sf = CreateFrame("ScrollFrame", "SRDashScroll", parent, "UIPanelScrollFrameTemplate")
     sf:SetPoint("TOPLEFT", 6, -89)
     sf:SetPoint("BOTTOMRIGHT", -28, 8)
+    sf:SetScript("OnSizeChanged", function(self)
+        if SR.dashChild then
+            SR.dashChild:SetWidth(self:GetWidth())
+        end
+    end)
 
     local child = CreateFrame("Frame", nil, sf)
-    child:SetWidth(sf:GetWidth())
+    child:SetWidth(sf:GetWidth() > 0 and sf:GetWidth() or 462)
     child:SetHeight(1)
     sf:SetScrollChild(child)
+    self.dashScroll = sf
     self.dashChild = child
     self.dashRows  = {}
 
@@ -285,6 +291,9 @@ end
 --------------------------------------------------------------
 function SR:UpdateDashboard()
     if not self.dashChild then return end
+    if self.dashScroll and self.dashScroll:GetWidth() > 0 then
+        self.dashChild:SetWidth(self.dashScroll:GetWidth())
+    end
 
     -- Перевірка чи ми лідер і чи не потрібно авто-стартнути сесію (якщо гра не повідомила вчасно при вході)
     if not self.sessionActive and self:IsSessionLeader() and (GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0) then

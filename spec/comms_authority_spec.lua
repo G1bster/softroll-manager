@@ -168,4 +168,47 @@ describe("SR session authority and message-sender validation (Comms.lua)", funct
             assert.is_not_nil(err)
         end)
     end)
+
+    describe("Anti-spoofing for sync, lock, overrides and co-hosts", function()
+        before_each(function()
+            wow.addRaidMember("Leader", 2)
+            wow.addRaidMember("Sneaky", 0)
+            SR:OnSessionStart("Leader", "Leader")
+            SR.db.reserves["Existing"] = { { itemID = 49978, count = 1 } }
+        end)
+
+        it("ignores Z from a non-host and does not wipe local reserves", function()
+            SR:OnAddonMessage("Z", "RAID", "Sneaky")
+            assert.is_not_nil(SR.db.reserves["Existing"])
+        end)
+
+        it("ignores Z when sync was not pending even if from host", function()
+            SR._syncPending = false
+            SR:OnAddonMessage("Z", "RAID", "Leader")
+            assert.is_not_nil(SR.db.reserves["Existing"])
+        end)
+
+        it("ignores Y from a non-host", function()
+            SR:OnAddonMessage("Y|Impostor|TANK|49978:2", "RAID", "Sneaky")
+            assert.is_nil(SR.db.reserves["Impostor"])
+        end)
+
+        it("ignores L from a non-host", function()
+            SR.locked = false
+            SR.sessionLocked = false
+            SR:OnAddonMessage("L|1", "RAID", "Sneaky")
+            assert.is_false(SR.sessionLocked)
+            assert.is_false(SR.locked)
+        end)
+
+        it("ignores P from a non-host/non-cohost", function()
+            SR:OnAddonMessage("P|Sneaky|10", "RAID", "Sneaky")
+            assert.is_nil(SR.db.playerOverrides["Sneaky"])
+        end)
+
+        it("ignores O from a non-host", function()
+            SR:OnAddonMessage("O|Sneaky", "RAID", "Sneaky")
+            assert.is_nil(SR.sessionCoHosts)
+        end)
+    end)
 end)

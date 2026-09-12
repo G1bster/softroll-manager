@@ -112,9 +112,9 @@ end
 
 --- Повертає true, якщо гравець у списку Ко-Хостів і є помічником в рейді.
 function SR:IsCoHost(name)
+    if not name then return false end
     if not self.db.coHosts then return false end
     if not self.db.coHosts[name] then return false end
-    if not name then return false end
     for i = 1, GetNumRaidMembers() do
         local rName, rank = GetRaidRosterInfo(i)
         if rName == name then
@@ -166,11 +166,11 @@ end
 
 function SR:StartSession()
     if not self:IsSessionLeader() then
-        self:Print("Лише лідер групи або рейду може почати сесію SR.")
+        self:Print(self.L.PRINT_SESSION_START_LEADER)
         return
     end
     if self.sessionActive and self.sessionHost ~= self:GetLocalPlayerName() then
-        self:Print("Сесія вже активна — хост: |cffffcc00" .. self.sessionHost .. "|r.")
+        self:Print(format(self.L.PRINT_SESSION_ALREADY_ACTIVE, self.sessionHost))
         return
     end
 
@@ -186,7 +186,7 @@ function SR:StartSession()
         self:SendAddonMsg("I|" .. self.db.instance .. "|" .. self.db.srMode, "RAID")
     end
 
-    self:Print("Сесію SR |cff44ff44РОЗПОЧАТО|r — ви активний хост.")
+    self:Print(self.L.PRINT_SESSION_STARTED_HOST)
     self:RefreshSessionUI()
     if self:ShouldPromptDataRecovery() and self.ShowDataRecoveryPrompt then
         self:ShowDataRecoveryPrompt()
@@ -215,7 +215,7 @@ function SR:AutoStartSession()
         self:SendAddonMsg("I|" .. self.db.instance .. "|" .. self.db.srMode, "RAID")
     end
 
-    self:Print("Сесію SR |cff44ff44авто-розпочато|r. Реєстрації |cffff4444ЗАБЛОКОВАНІ|r — розблокуйте коли готові.")
+    self:Print(self.L.PRINT_SESSION_AUTO_STARTED)
     self:RefreshSessionUI()
     if self:ShouldPromptDataRecovery() and self.ShowDataRecoveryPrompt then
         self:ShowDataRecoveryPrompt()
@@ -224,11 +224,11 @@ end
 
 function SR:EndSession()
     if not self.sessionActive then
-        self:Print("Немає активної сесії SR.")
+        self:Print(self.L.PRINT_SESSION_NO_ACTIVE)
         return
     end
     if not self:IsSessionHost() then
-        self:Print("Тільки активний хост (|cffffcc00" .. (self.sessionHost or "?") .. "|r) може завершити сесію.")
+        self:Print(format(self.L.PRINT_SESSION_ONLY_HOST_END, (self.sessionHost or "?")))
         return
     end
 
@@ -241,7 +241,7 @@ function SR:EndSession()
     self.locked        = false
     self.db.locked     = false  -- зберігаємо в db
 
-    self:Print("Сесію SR |cffff4444ЗАВЕРШЕНО|r.")
+    self:Print(self.L.PRINT_SESSION_ENDED)
     self:RefreshSessionUI()
 end
 
@@ -294,7 +294,9 @@ function SR:OnAddonMessage(message, channel, sender)
     elseif cmd == "E" then
         self:OnSessionEnd(rest, senderName)
     elseif cmd == "L" then
-        self:OnSessionLock(rest)
+        if not self.sessionHost or senderName == self.sessionHost then
+            self:OnSessionLock(rest, senderName)
+        end
     elseif cmd == "A" then
         self:OnSRAddRequest(rest, senderName)
     elseif cmd == "K" then
@@ -302,15 +304,23 @@ function SR:OnAddonMessage(message, channel, sender)
     elseif cmd == "Q" then
         self:OnSyncRequest(senderName)
     elseif cmd == "Y" then
-        self:OnSyncPlayer(rest)
+        if not self.sessionHost or senderName == self.sessionHost then
+            self:OnSyncPlayer(rest, senderName)
+        end
     elseif cmd == "Z" then
-        self:OnSyncComplete()
+        if not self.sessionHost or senderName == self.sessionHost then
+            self:OnSyncComplete(senderName)
+        end
     elseif cmd == "P" then
-        self:OnPlayerOverrideSync(rest)
+        if not self.sessionHost or senderName == self.sessionHost or self:IsCoHost(senderName) then
+            self:OnPlayerOverrideSync(rest, senderName)
+        end
     elseif cmd == "H" then
         self:OnHello(senderName)
     elseif cmd == "O" then
-        self:OnCoHostsUpdate(rest)
+        if not self.sessionHost or senderName == self.sessionHost then
+            self:OnCoHostsUpdate(rest, senderName)
+        end
     elseif cmd == "V" then
         self:OnRoleChangeRequest(rest, senderName)
     elseif cmd == "U" then
@@ -333,7 +343,7 @@ function SR:OnAddonMessage(message, channel, sender)
                     self.db.srMode = mode
                     if self.UpdateDashboard then self:UpdateDashboard() end
                     if self.UpdateLedger then self:UpdateLedger() end
-                    self:Print("Ко-хост " .. senderName .. " змінив налаштування підземелля.")
+                    self:Print(format(self.L.PRINT_COHOST_CHANGED_DUNGEON, senderName))
                     self:SendAddonMsg("I|" .. inst .. "|" .. mode, "RAID")
                 end
             elseif senderName == self.sessionHost then
@@ -360,7 +370,8 @@ function SR:OnAddonMessage(message, channel, sender)
     end
 end
 
-function SR:OnPlayerOverrideSync(data)
+function SR:OnPlayerOverrideSync(data, senderName)
+    if senderName and self.sessionHost and senderName ~= self.sessionHost and not self:IsCoHost(senderName) then return end
     if self:IsSessionHost() then return end
     local pName, limit = data:match("^([^|]+)|(.*)$")
     if pName and limit then
@@ -383,7 +394,7 @@ function SR:OnRoleChangeRequest(data, senderName)
     local pName, role = data:match("^([^|]+)|([^|]+)$")
     if pName and role then
         self:SetPlayerRole(pName, role)
-        self:Print("Ко-хост " .. senderName .. " змінив роль " .. pName .. " на " .. role)
+        self:Print(format(self.L.PRINT_COHOST_CHANGED_ROLE, senderName, pName, role))
     end
 end
 
@@ -394,7 +405,7 @@ function SR:OnOverrideChangeRequest(data, senderName)
     if pName and limit then
         limit = tonumber(limit)
         self:SetPlayerOverride(pName, limit)
-        self:Print("Ко-хост " .. senderName .. " змінив ліміт " .. pName .. " на " .. (limit > 0 and limit or "стандартний"))
+        self:Print(format(self.L.PRINT_COHOST_CHANGED_LIMIT, senderName, pName, (limit > 0 and limit or "стандартний")))
     end
 end
 
@@ -411,11 +422,11 @@ function SR:OnLockChangeRequest(data, senderName)
 
     local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
     if self.locked then
-        self:Print("Ко-хост " .. senderName .. " ЗАБЛОКУВАВ софт-роли.")
-        SendChatMessage("Реєстрацію софт-ролів ЗАБЛОКОВАНО.", chatType)
+        self:Print(format(self.L.PRINT_COHOST_LOCKED, senderName))
+        SendChatMessage(self.L.SESSION_LOCKED, chatType)
     else
-        self:Print("Ко-хост " .. senderName .. " РОЗБЛОКУВАВ софт-роли.")
-        SendChatMessage("Реєстрацію софт-ролів РОЗБЛОКОВАНО.", chatType)
+        self:Print(format(self.L.PRINT_COHOST_UNLOCKED, senderName))
+        SendChatMessage(self.L.SESSION_UNLOCKED, chatType)
     end
 end
 
@@ -436,10 +447,10 @@ function SR:OnSessionStart(_hostName, senderName)
     self.sessionHost   = senderName
 
     if senderName == self:GetLocalPlayerName() then
-        self:Print("Ви хост сесії SR.")
+        self:Print(self.L.PRINT_SESSION_HOST_IS_YOU)
         self:BroadcastCoHosts()
     elseif not alreadyKnownActive then
-        self:Print("Сесію SR розпочато — хост: |cffffcc00" .. senderName .. "|r.")
+        self:Print(format(self.L.PRINT_SESSION_STARTED_BY, senderName))
         -- Отримуємо дані про резерви від хоста для перегляду
         self:RequestSessionSync(senderName)
     end
@@ -456,11 +467,12 @@ function SR:OnSessionEnd(_hostName, senderName)
     self.sessionHost   = nil
     self.sessionLocked = false
 
-    self:Print("Сесію SR завершено гравцем |cffffcc00" .. senderName .. "|r.")
+    self:Print(format(self.L.PRINT_SESSION_ENDED_BY, senderName))
     self:RefreshSessionUI()
 end
 
-function SR:OnSessionLock(state)
+function SR:OnSessionLock(state, senderName)
+    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
     self.sessionLocked = (state == "1")
     if not self:IsSessionHost() then
         self.locked = self.sessionLocked
@@ -490,7 +502,7 @@ function SR:OnHello(senderName)
     end
     
     if self.sessionActive and self.sessionHost == senderName and not self:IsSessionHost() then
-        self:Print("Хост " .. senderName .. " перезавантажив гру. Сесію призупинено (очікування відновлення).")
+        self:Print(format(self.L.PRINT_HOST_RELOADED, senderName))
         self.sessionActive = false
         self.sessionLocked = false
         self:RefreshSessionUI()
@@ -548,7 +560,8 @@ function SR:OnSyncRequest(senderName)
     self:SendAddonMsg("Z", "WHISPER", senderName)
 end
 
-function SR:OnSyncPlayer(data)
+function SR:OnSyncPlayer(data, senderName)
+    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
     if self:IsSessionHost() then return end -- хост локально має пріоритет
 
     local pName, role, itemStr = data:match("^([^|]+)|([^|]+)|(.*)$")
@@ -601,7 +614,10 @@ function SR:OnSyncPlayer(data)
     end
 end
 
-function SR:OnSyncComplete()
+function SR:OnSyncComplete(senderName)
+    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
+    if not self._syncPending then return end
+
     -- Прибираємо локально лише тих гравців, кого хост жодного разу не
     -- підтвердив у цьому раунді синхронізації (Q…Z) — тобто діагностуємо
     -- різницю (diff), а не стираємо все на самому початку.
@@ -614,11 +630,12 @@ function SR:OnSyncComplete()
     self._syncSeenPlayers = {}
 
     self._syncPending = false
-    self:Print("Синхронізацію завершено.")
+    self:Print(self.L.PRINT_SYNC_COMPLETE)
     self:RefreshSessionUI()
 end
 
-function SR:OnCoHostsUpdate(data)
+function SR:OnCoHostsUpdate(data, senderName)
+    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
     if self:IsSessionHost() then return end
     self.sessionCoHosts = {}
     if data and data ~= "" then
@@ -639,12 +656,12 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
     targetPlayer = targetPlayer or self:GetLocalPlayerName()
 
     if not itemID then
-        self:Print("Предмет не вибрано.")
+        self:Print(self.L.PRINT_NO_ITEM_SELECTED)
         return
     end
 
     if self.locked or self.sessionLocked then
-        self:Print("Софт-роли наразі |cffff4444ЗАБЛОКОВАНІ|r.")
+        self:Print(self.L.WHISPER_CHANGES_LOCKED)
         return
     end
 
@@ -663,7 +680,7 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
                 self:BroadcastLockState()
             end
         else
-            self:Print("Немає активної сесії SR.")
+            self:Print(self.L.PRINT_SESSION_NO_ACTIVE)
             return
         end
     end
@@ -679,9 +696,9 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
         local ok, err = self:ProcessSRRegistration(targetPlayer, link, count, false, isSet)
         if ok then
             if targetPlayer == self:GetLocalPlayerName() then
-                self:Print("SR зареєстровано.")
+                self:Print(self.L.PRINT_SR_REGISTERED)
             else
-                self:Print("SR зареєстровано для " .. targetPlayer .. ".")
+                self:Print(format(self.L.PRINT_SR_REGISTERED_FOR, targetPlayer))
                 -- Сповіщення цільовому гравцю
                 self:SendAddonMsg("K|1|РЛ ("..self:GetLocalPlayerName()..") додав вам софт-рол: " .. link, "WHISPER", targetPlayer)
             end
@@ -691,7 +708,7 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
             if self.UpdateLedger then self:UpdateLedger() end
             return true
         else
-            self:Print("Помилка реєстрації SR: " .. (err or "Невідома помилка."))
+            self:Print(format(self.L.PRINT_SR_REG_ERROR, err or "Невідома помилка."))
             return false, err
         end
     end
@@ -699,7 +716,7 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
     if not self.sessionHost then
         -- IsAdmin() був true, але AutoStartSession() все одно не стартував
         -- (наприклад, офіцер рейду без прав лідера) — сесії й досі немає.
-        self:Print("Немає активної сесії SR.")
+        self:Print(self.L.PRINT_SESSION_NO_ACTIVE)
         return
     end
 
@@ -708,16 +725,16 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
     if self:CanEditSession() then
         self._pendingSRItemID = itemID
         self:SendAddonMsg("M|" .. targetPlayer .. "|" .. itemID .. "|" .. count .. "|" .. setFlag, "WHISPER", self.sessionHost)
-        self:Print("Запит на реєстрацію SR (Ко-Хост) надіслано хосту...")
+        self:Print(self.L.PRINT_REG_REQUEST_COHOST)
         return "PENDING"
     else
         if targetPlayer ~= self:GetLocalPlayerName() then
-            self:Print("Ви не можете додавати софт-роли іншим гравцям.")
+            self:Print(self.L.PRINT_CANNOT_ADD_OTHERS)
             return
         end
         self._pendingSRItemID = itemID
         self:SendAddonMsg("A|" .. itemID .. "|" .. count .. "|" .. setFlag, "WHISPER", self.sessionHost)
-        self:Print("Запит на реєстрацію SR надіслано хосту |cffffcc00" .. self.sessionHost .. "|r…")
+        self:Print(format(self.L.PRINT_REG_REQUEST_SENT, self.sessionHost))
         return "PENDING"
     end
 end
@@ -777,14 +794,14 @@ function SR:OnSRManageRequest(data, senderName)
 
     local ok, err = self:ProcessSRRegistration(targetPlayer, link, count, false, isSet)
     if ok then
-        self:Print(senderName .. " (Ко-Хост) додав софт-рол для " .. targetPlayer .. ": " .. link)
+        self:Print(format(self.L.PRINT_COHOST_ADDED_FOR, senderName, targetPlayer, link))
         self:SendAddonMsg("K|1|SR для " .. targetPlayer .. " успішно зареєстровано.", "WHISPER", senderName)
         if self.UpdateLootBrowserItems then self:UpdateLootBrowserItems() end
         if self.UpdateLedger then self:UpdateLedger() end
         
         local chatType = (GetNumRaidMembers() > 0) and "RAID" or "PARTY"
         if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then chatType = "SAY" end
-        SendChatMessage("Додано " .. link .. " до софтів гравця " .. targetPlayer, chatType)
+        SendChatMessage(format(self.L.SR_ADDED_FOR_PLAYER, link, targetPlayer), chatType)
     else
         self:SendAddonMsg("K|0|" .. (err or "Невідома помилка."), "WHISPER", senderName)
     end
@@ -831,14 +848,14 @@ function SR:OnSRRemoveRequest(data, senderName)
     local removed = self:RemoveSR(targetPlayer, itemID)
     if removed then
         self:SendAddonMsg("K|1|Предмет успішно видалено.", "WHISPER", senderName)
-        self:Print(senderName .. (targetPlayer ~= senderName and " (Ко-Хост) видалив SR у " .. targetPlayer or " видалив(ла) свій SR."))
+        self:Print(senderName .. (targetPlayer ~= senderName and (" (помічник) видалив софт-рол у " .. targetPlayer) or " видалив(ла) свій софт-рол."))
         
         if targetPlayer ~= senderName then
             local _, link = GetItemInfo(itemID)
             link = link or self:GetSafeItemLink(itemID, nil)
             local chatType = (GetNumRaidMembers() > 0) and "RAID" or "PARTY"
             if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then chatType = "SAY" end
-            SendChatMessage("Видалено " .. link .. " з софтів гравця " .. targetPlayer, chatType)
+            SendChatMessage(format(self.L.SR_REMOVED_FOR_PLAYER, link, targetPlayer), chatType)
         end
     else
         self:SendAddonMsg("K|0|Предмет не знайдено.", "WHISPER", senderName)
@@ -861,14 +878,14 @@ function SR:OnSRClearRequest(data, senderName)
 
     self:ClearPlayerSR(targetPlayer)
     self:SendAddonMsg("K|1|Софт-роли очищено.", "WHISPER", senderName)
-    self:Print(senderName .. (targetPlayer ~= senderName and " (Ко-Хост) очистив SR у " .. targetPlayer or " очистив(ла) свої SR."))
+    self:Print(senderName .. (targetPlayer ~= senderName and (" (помічник) очистив софт-роли у " .. targetPlayer) or " очистив(ла) свої софт-роли."))
 end
 
 function SR:OnWipeAll(senderName)
     if self:IsSessionHost() then
         if self:IsCoHost(senderName) then
             self:ResetAllSR()
-            self:Print(senderName .. " (Ко-Хост) очистив усі софт-роли.")
+            self:Print(format(self.L.PRINT_COHOST_CLEARED_ALL, senderName))
         end
         return
     end
@@ -884,7 +901,7 @@ function SR:OnWipeAll(senderName)
     wipe(self.db.reserves)
     wipe(self.db.roles)
     self:RefreshSessionUI()
-    self:Print("Хост очистив усі софт-роли.")
+    self:Print(self.L.PRINT_HOST_CLEARED_ALL)
 end
 
 --- Спільна валідація + додавання SR (використовується ChatParser, Comms та інтерфейсом хоста).
@@ -1112,7 +1129,7 @@ function SR:OnRecoveryComplete(senderName)
     self._recoveryFrom    = nil
     self._recoveryData    = nil
 
-    self:Print("Відновлено софт-роли для |cff44ff44" .. n .. "|r гравців із копії |cffffcc00" .. (senderName or "?") .. "|r.")
+    self:Print(format(self.L.PRINT_RECOVERY_COMPLETE, n, (senderName or "?")))
     self:RefreshSessionUI()
     self:BroadcastFullSync()
     if self.HideRecoveryPopup then self:HideRecoveryPopup() end

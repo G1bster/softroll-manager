@@ -39,6 +39,7 @@ function M.load()
     -- Кожен dofile — новий чанк; SoftRoll = {} у Core.lua створює нову
     -- глобальну таблицю щоразу, тож попередній стан не протікає між тестами.
     dofile(ROOT .. "/Core.lua")
+    dofile(ROOT .. "/Locales.lua")
     dofile(ROOT .. "/Comms.lua")
     dofile(ROOT .. "/LootData.lua")
     dofile(ROOT .. "/ChatParser.lua")

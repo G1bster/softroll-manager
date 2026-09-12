@@ -137,11 +137,17 @@ function SR:BuildLootBrowser(parent)
     local itemScroll = CreateFrame("ScrollFrame", "SRItemScroll", itemPanel, "UIPanelScrollFrameTemplate")
     itemScroll:SetPoint("TOPLEFT", 4, -4)
     itemScroll:SetPoint("BOTTOMRIGHT", -24, 4)
+    itemScroll:SetScript("OnSizeChanged", function(self)
+        if SR.lbItemChild then
+            SR.lbItemChild:SetWidth(self:GetWidth())
+        end
+    end)
 
     local itemChild = CreateFrame("Frame", nil, itemScroll)
-    itemChild:SetWidth(itemScroll:GetWidth())
+    itemChild:SetWidth(itemScroll:GetWidth() > 0 and itemScroll:GetWidth() or 456)
     itemChild:SetHeight(1)
     itemScroll:SetScrollChild(itemChild)
+    self.lbItemScroll = itemScroll
     self.lbItemChild = itemChild
     self.lbItemRows  = {}
 
@@ -155,7 +161,7 @@ function SR:BuildLootBrowser(parent)
         
         btn:SetScript("OnClick", function()
             if not SR.lbSelectedItemID then
-                SR:Print("Спочатку виберіть предмет зі списку.")
+                SR:Print(SR.L.PRINT_SELECT_ITEM_FIRST)
                 return
             end
             
@@ -165,10 +171,10 @@ function SR:BuildLootBrowser(parent)
                 -- Логіка видалення
                 if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
                     SR:RemoveSR(target, SR.lbSelectedItemID)
-                    SR:Print("Видалено предмет зі списку " .. target)
+                    SR:Print(format(SR.L.PRINT_ITEM_REMOVED_FROM, target))
                 else
                     SR:SendAddonMsg("R|" .. target .. "|" .. SR.lbSelectedItemID, "WHISPER", SR.sessionHost)
-                    SR:Print("Запит на видалення надіслано хосту...")
+                    SR:Print(SR.L.PRINT_REMOVE_REQUEST_SENT)
                 end
             else
                 -- Логіка додавання (isSet = true, тобто встановлюємо точну кількість)
@@ -184,7 +190,7 @@ function SR:BuildLootBrowser(parent)
         if not SR.lbSelectedItemID then return end
         SR:ToggleWishlistItem(SR.lbSelectedItemID)
         SR:UpdateLootBrowserItems()
-        if SR.lbSelectedBoss == 1 then
+        if SR.lbActiveSubTab == "wishlist" then
             SR:UpdateLootBrowser()
         end
     end)
@@ -299,6 +305,9 @@ end
 -- ОНОВЛЕННЯ ОГЛЯДАЧА ЗДОБИЧІ
 --------------------------------------------------------------
 function SR:UpdateLootBrowser()
+    if self.lbItemScroll and self.lbItemScroll:GetWidth() > 0 and self.lbItemChild then
+        self.lbItemChild:SetWidth(self.lbItemScroll:GetWidth())
+    end
     if self.lbActiveSubTab == "wishlist" then
         self.lbBossLabel:Hide()
         self.lbBossDD:Hide()
@@ -422,6 +431,7 @@ function SR:LayoutReserveButtons()
     end
     
     local maxAllowed = remaining + currentItemCount
+    local canEditTarget = self:CanEditPlayerSR(targetName)
     
     local visibleBtns = {}
     for i = 0, 4 do
@@ -429,7 +439,12 @@ function SR:LayoutReserveButtons()
             self.lbReserveBtns[i]:Show()
             table.insert(visibleBtns, self.lbReserveBtns[i])
             
-            if i == 0 then
+            if not canEditTarget then
+                self.lbReserveBtns[i]:Disable()
+                if i == 0 then
+                    self.lbReserveBtns[i]:SetText("|cff666666Видалити софт|r")
+                end
+            elseif i == 0 then
                 if currentItemCount > 0 then
                     self.lbReserveBtns[i]:Enable()
                     self.lbReserveBtns[i]:SetText("|cffff4444Видалити софт|r")
@@ -440,7 +455,6 @@ function SR:LayoutReserveButtons()
             else
                 if not itemID or i > maxAllowed then
                     self.lbReserveBtns[i]:Disable()
-                    -- Default text gets grayed out by WoW automatically, but just in case
                 else
                     self.lbReserveBtns[i]:Enable()
                 end

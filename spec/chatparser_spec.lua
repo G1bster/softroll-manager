@@ -144,10 +144,44 @@ describe("SR chat command parsing (ChatParser.lua)", function()
             assert.are.equal(1, SR:GetUsedSRCount("Target"))
         end)
 
+        it("correctly handles Cyrillic target names without breaking UTF-8 bytes", function()
+            wow.addRaidMember("Тарас", 0)
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " Тарас", "Leader", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Тарас"))
+        end)
+
+        it("refuses a non-leader/non-co-host attempting to register SR for someone else", function()
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " Target", "Member", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Target"))
+            assert.matches("Тільки РЛ або помічник", lastWhisperTo("Member"))
+        end)
+
         it("refuses a target that isn't in the raid", function()
             SR:HandleIncoming("sr " .. ITEM_LINK .. " NoSuchPlayer", "Leader", false)
             assert.are.equal(0, SR:GetUsedSRCount("NoSuchPlayer"))
             assert.matches("немає у рейді", lastWhisperTo("Leader"))
+        end)
+
+        it("refuses registration when session is locked even with a target player", function()
+            SR.locked = true
+            SR:HandleIncoming("sr " .. ITEM_LINK .. " Target", "Leader", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Target"))
+            assert.matches("ЗАБЛОКОВАНА", lastWhisperTo("Leader"))
+        end)
+
+        it("refuses CmdClear when session is locked for non-host member", function()
+            SR:AddSR("Member", ITEM_LINK, 1)
+            SR.locked = true
+            SR:HandleIncoming("sr clear", "Member", false)
+            assert.are.equal(1, SR:GetUsedSRCount("Member"))
+            assert.matches("ЗАБЛОКОВАНІ", lastWhisperTo("Member"))
+        end)
+
+        it("allows leader to clear another player's SR via chat command", function()
+            SR:AddSR("Target", ITEM_LINK, 1)
+            SR:HandleIncoming("sr clear " .. ITEM_LINK .. " Target", "Leader", false)
+            assert.are.equal(0, SR:GetUsedSRCount("Target"))
+            assert.matches("для Target було видалено", lastWhisperTo("Leader"))
         end)
 
         it("CmdRegister itself refuses a named target when the local client can't edit the session", function()

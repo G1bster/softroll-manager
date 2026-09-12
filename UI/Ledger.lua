@@ -94,10 +94,10 @@ function SR:UpdateLedgerItemIcons(row, list, mode)
                 else
                     if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
                         SR:RemoveSR(row.playerName, btn.itemID)
-                        SR:Print("Видалено предмет зі списку " .. row.playerName)
+                        SR:Print(format(SR.L.PRINT_ITEM_REMOVED_FROM, row.playerName))
                     else
                         SR:SendAddonMsg("R|" .. row.playerName .. "|" .. btn.itemID, "WHISPER", SR.sessionHost)
-                        SR:Print("Запит на видалення надіслано хосту...")
+                        SR:Print(SR.L.PRINT_REMOVE_REQUEST_SENT)
                     end
                 end
             end)
@@ -263,7 +263,7 @@ function SR:BuildEditPlayerPopup()
     addBtn:SetScript("OnClick", function()
         local itemID = popup.selectedItemID
         if not itemID then
-            SR:Print("Оберіть предмет зі списку.")
+            SR:Print(SR.L.PRINT_SELECT_ITEM_FIRST)
             return
         end
 
@@ -497,7 +497,7 @@ function SR:BuildLedger(parent)
     end)
 
     local child = CreateFrame("Frame", nil, sf)
-    child:SetWidth(sf:GetWidth())
+    child:SetWidth(sf:GetWidth() > 0 and sf:GetWidth() or 462)
     child:SetHeight(1)
     sf:SetScrollChild(child)
     self.ledgerScroll = sf
@@ -532,7 +532,7 @@ function SR:BuildLedger(parent)
         info.text = "Інструкція в чат (для гравців)"
         info.func = function()
             if not SR:CanEditSession() then
-                SR:Print("Тільки лідер рейду або помічник аддону може анонсувати інструкції.")
+                SR:Print(SR.L.PRINT_ONLY_LEADER_ANNOUNCE)
                 return
             end
             local chatType = "SAY"
@@ -541,11 +541,11 @@ function SR:BuildLedger(parent)
             elseif GetNumPartyMembers() > 0 then
                 chatType = "PARTY"
             end
-            SendChatMessage("Щоб зарезервувати предмет, напишіть в ПМ або рейд чат: sr [лінк предмета]", chatType)
+            SendChatMessage(SR.L.INSTRUCT_RESERVE, chatType)
             if SR.db.srMode ~= "rs_x1" then
-                SendChatMessage("Для подвійного софту: sr [лінк предмета] x2", chatType)
+                SendChatMessage(SR.L.INSTRUCT_DOUBLE, chatType)
             end
-            SendChatMessage("Ваші софти: sr list - Видалити один: sr clear [лінк] - Очистити всі: sr clear", chatType)
+            SendChatMessage(SR.L.INSTRUCT_COMMANDS, chatType)
         end
         info.notCheckable = true
         UIDropDownMenu_AddButton(info, level)
@@ -562,7 +562,7 @@ function SR:BuildLedger(parent)
 
     -- Діалог підтвердження
     StaticPopupDialogs["SOFTROLL_CONFIRM_CLEAR"] = {
-        text         = "Очистити ВСІ софти? Це неможливо відмінити.",
+        text         = SR.L.POPUP_CONFIRM_CLEAR_ALL,
         button1      = "Так, очистити",
         button2      = "Скасувати",
         OnAccept     = function()
@@ -571,11 +571,11 @@ function SR:BuildLedger(parent)
             
             if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
                 SR:ResetAllSR()
-                SendChatMessage("Очищено ВСІ софт-роли рейду.", chatType)
+                SendChatMessage(SR.L.ALL_SRS_CLEARED, chatType)
             else
                 SR:SendAddonMsg("W", "WHISPER", SR.sessionHost)
-                SR:Print("Запит на очищення всіх софтів надіслано хосту...")
-                SendChatMessage("Очищено ВСІ софт-роли рейду.", chatType)
+                SR:Print(SR.L.PRINT_CLEAR_ALL_REQUEST_SENT)
+                SendChatMessage(SR.L.ALL_SRS_CLEARED, chatType)
             end
         end,
         timeout      = 0,
@@ -584,21 +584,24 @@ function SR:BuildLedger(parent)
     }
 
     StaticPopupDialogs["SOFTROLL_CONFIRM_CLEAR_PLAYER"] = {
-        text         = "Очистити всі софти гравця %s?",
+        text         = SR.L.POPUP_CONFIRM_CLEAR_PLAYER,
         button1      = "Очистити",
         button2      = "Скасувати",
         OnAccept     = function(self, data)
+            data = data or (self and self.data)
+            if not data or not data.target then return end
             local target = data.target
             
             if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
                 SR:ClearPlayerSR(target)
-                SR:Print("Очищено софт-роли для " .. target)
+                SR:Print(format(SR.L.PRINT_SRS_CLEARED_FOR, target))
                 local chatType = (GetNumRaidMembers() > 0) and "RAID" or "PARTY"
-                if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then chatType = "SAY" end
-                SendChatMessage("Очищено софт-роли гравця " .. target, chatType)
+                if target ~= SR:GetLocalPlayerName() then
+                    SendChatMessage(format(SR.L.PLAYER_SRS_CLEARED, target), chatType)
+                end
             else
                 SR:SendAddonMsg("C|" .. target, "WHISPER", SR.sessionHost)
-                SR:Print("Запит на очищення надіслано хосту...")
+                SR:Print(SR.L.PRINT_CLEAR_PLAYER_SENT)
             end
         end,
         timeout      = 0,
@@ -607,20 +610,22 @@ function SR:BuildLedger(parent)
     }
 
     StaticPopupDialogs["SOFTROLL_CONFIRM_REMOVE_ITEM"] = {
-        text         = "Видалити %s з софтів гравця %s?",
+        text         = SR.L.POPUP_CONFIRM_REMOVE_ITEM,
         button1      = "Видалити",
         button2      = "Скасувати",
         OnAccept     = function(self, data)
+            data = data or (self and self.data)
+            if not data or not data.target or not data.itemID then return end
             local chatType = (GetNumRaidMembers() > 0) and "RAID" or "PARTY"
             if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then chatType = "SAY" end
             
             if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
                 SR:RemoveSR(data.target, data.itemID)
-                SR:Print("Видалено предмет зі списку " .. data.target)
-                SendChatMessage("Видалено " .. data.link .. " з софтів гравця " .. data.target, chatType)
+                SR:Print(format(SR.L.PRINT_ITEM_REMOVED_FROM, data.target))
+                SendChatMessage(format(SR.L.SR_REMOVED_FOR_PLAYER, (data.link or ("Предмет #" .. data.itemID)), data.target), chatType)
             else
                 SR:SendAddonMsg("R|" .. data.target .. "|" .. data.itemID, "WHISPER", SR.sessionHost)
-                SR:Print("Запит на видалення надіслано хосту...")
+                SR:Print(SR.L.PRINT_REMOVE_REQUEST_SENT)
             end
         end,
         timeout      = 0,
@@ -629,15 +634,17 @@ function SR:BuildLedger(parent)
     }
 
     StaticPopupDialogs["SOFTROLL_CONFIRM_ADD_ITEM"] = {
-        text         = "Додати %s гравцю %s?",
+        text         = SR.L.POPUP_CONFIRM_ADD_ITEM,
         button1      = "Додати",
         button2      = "Скасувати",
         OnAccept     = function(self, data)
+            data = data or (self and self.data)
+            if not data or not data.target or not data.itemID then return end
             local ok = SR:RequestSRFromUI(data.itemID, 1, data.target)
             if ok == true then
                 local chatType = (GetNumRaidMembers() > 0) and "RAID" or "PARTY"
                 if GetNumRaidMembers() == 0 and GetNumPartyMembers() == 0 then chatType = "SAY" end
-                SendChatMessage("Додано " .. data.link .. " до софтів гравця " .. data.target, chatType)
+                SendChatMessage(format(SR.L.SR_ADDED_FOR_PLAYER, (data.link or ("Предмет #" .. data.itemID)), data.target), chatType)
             end
         end,
         timeout      = 0,
@@ -772,7 +779,7 @@ local function GetLedgerRow(container, index)
                                 end
                             end
                             local linkOut = itemEntry.itemLink or ("Предмет #" .. (itemEntry.itemID or "?"))
-                            local msg = linkOut .. " засофтили: " .. table.concat(parts, ", ")
+                            local msg = format(SR.L.ANNOUNCE_ITEM_RESERVERS, linkOut, table.concat(parts, ", "))
                             local chatType = "SAY"
                             if GetNumRaidMembers() > 0 then
                                 chatType = "RAID"
@@ -781,28 +788,30 @@ local function GetLedgerRow(container, index)
                             end
                             SendChatMessage(msg, chatType)
                         end
+                        info2.arg1 = "SoftRollBossItem"
+                        info2.arg2 = itemEntry.itemLink or fallbackName
                         UIDropDownMenu_AddButton(info2, level)
                         
                         local listFrame = _G["DropDownList" .. level]
                         local button = _G["DropDownList" .. level .. "Button" .. listFrame.numButtons]
-                        if button then
-                            local itemLink = itemEntry.itemLink
-                            local origOnEnter = button:GetScript("OnEnter")
-                            local origOnLeave = button:GetScript("OnLeave")
-                            button:SetScript("OnEnter", function(self)
-                                if origOnEnter then origOnEnter(self) end
-                                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                                if itemLink and itemLink:match("item:") then
-                                    GameTooltip:SetHyperlink(itemLink)
-                                else
-                                    GameTooltip:SetText(fallbackName, 1, 1, 1)
+                        if button and not button.srHooked then
+                            button:HookScript("OnEnter", function(self)
+                                if self.arg1 == "SoftRollBossItem" and self.arg2 then
+                                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                                    if type(self.arg2) == "string" and self.arg2:match("item:") then
+                                        GameTooltip:SetHyperlink(self.arg2)
+                                    else
+                                        GameTooltip:SetText(tostring(self.arg2), 1, 1, 1)
+                                    end
+                                    GameTooltip:Show()
                                 end
-                                GameTooltip:Show()
                             end)
-                            button:SetScript("OnLeave", function(self)
-                                if origOnLeave then origOnLeave(self) end
-                                GameTooltip:Hide()
+                            button:HookScript("OnLeave", function(self)
+                                if self.arg1 == "SoftRollBossItem" then
+                                    GameTooltip:Hide()
+                                end
                             end)
+                            button.srHooked = true
                         end
                     end
                 end
@@ -827,8 +836,18 @@ local function GetLedgerRow(container, index)
         local del = btn.delBtn
         del:SetScript("OnClick", function()
             if not btn.itemID then return end
-            local dialog = StaticPopup_Show("SOFTROLL_CONFIRM_REMOVE_ITEM", btn.itemLink or ("Предмет #" .. btn.itemID), row.playerName)
-            if dialog then dialog.data = { target = row.playerName, itemID = btn.itemID, link = btn.itemLink or ("Предмет #" .. btn.itemID) } end
+            if SR:CanEditSession() and row.playerName ~= SR:GetLocalPlayerName() then
+                local dialog = StaticPopup_Show("SOFTROLL_CONFIRM_REMOVE_ITEM", btn.itemLink or ("Предмет #" .. btn.itemID), row.playerName)
+                if dialog then dialog.data = { target = row.playerName, itemID = btn.itemID, link = btn.itemLink or ("Предмет #" .. btn.itemID) } end
+            else
+                if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
+                    SR:RemoveSR(row.playerName, btn.itemID)
+                    SR:Print(format(SR.L.PRINT_ITEM_REMOVED_FROM, row.playerName))
+                else
+                    SR:SendAddonMsg("R|" .. row.playerName .. "|" .. btn.itemID, "WHISPER", SR.sessionHost)
+                    SR:Print(SR.L.PRINT_REMOVE_REQUEST_SENT)
+                end
+            end
         end)
 
         btn.countFS = btn:CreateFontString(nil, "OVERLAY")
@@ -1325,6 +1344,9 @@ end
 --------------------------------------------------------------
 function SR:UpdateLedger()
     if not self.ledgerChild then return end
+    if self.ledgerScroll and self.ledgerScroll:GetWidth() > 0 then
+        self.ledgerChild:SetWidth(self.ledgerScroll:GetWidth())
+    end
 
     if self.ledgerTabs then
         self.ledgerTabs.players.active = (self.ledgerActiveSubTab == "players")

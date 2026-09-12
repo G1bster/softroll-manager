@@ -73,7 +73,7 @@ function SR:HandleIncoming(msg, sender, isWhisper)
         end
         
         if shouldReply then
-            self:Reply(sender, isWhisper, "Сесія софт-ролів ще не розпочалась. Зачекайте, поки РЛ її почне.")
+            self:Reply(sender, isWhisper, self.L.WHISPER_SESSION_NOT_STARTED)
         end
         return
     end
@@ -87,8 +87,7 @@ function SR:HandleIncoming(msg, sender, isWhisper)
 
     -- Підкоманди
     if argsLower == "" or argsLower == "help" then
-        self:Reply(sender, isWhisper,
-            "Використання: sr [ЛінкНаПредмет], sr [ЛінкНаПредмет] x2, sr list, sr clear, sr help")
+        self:Reply(sender, isWhisper, self.L.WHISPER_HELP)
         return
     end
 
@@ -119,22 +118,23 @@ function SR:HandleHiddenSR(args, sender, isWhisper)
 
     local itemLink = rest:match("(|c%x+|Hitem:.-%|h%[.-%]|h|r)")
     if not itemLink then
-        self:Reply(sender, isWhisper, "Помилка: Не знайдено дійсного посилання на предмет у повідомленні SRManager.")
+        self:Reply(sender, isWhisper, self.L.WHISPER_ERR_NO_LINK)
         return
     end
 
     local mul = rest:match("[x\209\133](%d+)")
     local count = mul and tonumber(mul) or 1
+    local cx = (count > 1) and (" x" .. count) or ""
 
     local ok, err = self:ProcessSRRegistration(sender, itemLink, count, true)
     if ok then
         local used  = self:GetUsedSRCount(sender)
         local limit = self:GetSRLimit(sender)
         self:Reply(sender, isWhisper,
-            "Софт-рол зареєстровано (" .. used .. " з " .. limit .. " використано).")
-        self:Print(sender .. " зареєстрував софт-рол через SRManager: " .. itemLink)
+            format(self.L.WHISPER_REGISTER_SUCCESS, itemLink, cx, used, limit))
+        self:Print(format(self.L.PRINT_USER_REGISTERED, sender, itemLink .. cx))
     else
-        self:Reply(sender, isWhisper, "Помилка: " .. (err or "Невідома помилка."))
+        self:Reply(sender, isWhisper, format(self.L.WHISPER_ERR_PREFIX, err or "Невідома помилка."))
     end
 end
 
@@ -144,7 +144,7 @@ end
 function SR:CmdList(sender, isWhisper)
     local reserves = self.db.reserves[sender]
     if not reserves or #reserves == 0 then
-        self:Reply(sender, isWhisper, "У вас немає зареєстрованих софт-ролів.")
+        self:Reply(sender, isWhisper, self.L.WHISPER_NO_SRS)
         return
     end
 
@@ -172,8 +172,44 @@ end
 --------------------------------------------------------------
 function SR:CmdClear(args, sender, isWhisper)
     if not self.sessionActive then
-        self:Reply(sender, isWhisper, "Сесія софт-ролів ще не розпочалась.")
+        self:Reply(sender, isWhisper, self.L.WHISPER_SESSION_NOT_ACTIVE)
         return
+    end
+
+    if self.locked or self.sessionLocked then
+        self:Reply(sender, isWhisper, self.L.WHISPER_CHANGES_LOCKED)
+        return
+    end
+
+    local senderCanEdit = (sender == self.sessionHost or sender == self:GetLocalPlayerName() or self:IsCoHost(sender))
+    local targetPlayer = sender
+    local remaining = args:gsub("(|c%x+|Hitem:.-%|h%[.-%]|h|r)", "")
+    remaining = remaining:gsub("^clear%s*", "")
+    remaining = strtrim(remaining)
+    local possibleTarget = remaining:match("^(%S+)")
+    if possibleTarget and possibleTarget ~= "" then
+        if senderCanEdit then
+            local foundName = nil
+            local lowerInput = possibleTarget:lower()
+            for _, m in ipairs(self:GetRaidMembers()) do
+                if m.name == possibleTarget or m.name:lower() == lowerInput then
+                    foundName = m.name
+                    break
+                end
+            end
+            if not foundName and self:IsInRaid(possibleTarget) then
+                foundName = possibleTarget
+            end
+            if foundName then
+                targetPlayer = foundName
+            else
+                self:Reply(sender, isWhisper, format(self.L.WHISPER_ERR_NOT_IN_RAID, possibleTarget))
+                return
+            end
+        else
+            self:Reply(sender, isWhisper, self.L.WHISPER_ERR_NOT_AUTHORIZED_CLEAR)
+            return
+        end
     end
 
     local itemLink = args:match("(|c%x+|Hitem:.-%|h%[.-%]|h|r)")
@@ -181,7 +217,7 @@ function SR:CmdClear(args, sender, isWhisper)
         local itemID = self:GetItemIDFromLink(itemLink)
         if itemID then
             local removed = false
-            local list = self.db.reserves[sender]
+            local list = self.db.reserves[targetPlayer]
             if list then
                 local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
                 for i, entry in ipairs(list) do
@@ -192,32 +228,56 @@ function SR:CmdClear(args, sender, isWhisper)
                     end
                 end
                 if removed then
-                    if #list == 0 then self.db.reserves[sender] = nil end
-                    self:Reply(sender, isWhisper, "Ваш софт на " .. itemLink .. " було успішно видалено.")
-                    self:Print(sender .. " скасував софт на " .. itemLink)
+                    if #list == 0 then self.db.reserves[targetPlayer] = nil end
+                    if targetPlayer == sender then
+                        self:Reply(sender, isWhisper, format(self.L.WHISPER_REMOVE_SUCCESS, itemLink))
+                        self:Print(sender .. " скасував софт на " .. itemLink)
+                    else
+                        self:Reply(sender, isWhisper, format(self.L.WHISPER_REMOVE_FOR_TARGET, itemLink, targetPlayer))
+                        self:Reply(targetPlayer, true, format(self.L.WHISPER_RL_REMOVED_SR, sender, itemLink))
+                        self:Print(sender .. " скасував софт на " .. itemLink .. " для " .. targetPlayer)
+                    end
                     if self:IsSessionHost() or (self:IsSessionLeader() and not self.sessionActive) then
-                        if self.BroadcastPlayerSync then self:BroadcastPlayerSync(sender) end
+                        if self.BroadcastPlayerSync then self:BroadcastPlayerSync(targetPlayer) end
                     end
                     if self.RefreshSessionUI then self:RefreshSessionUI() end
                 else
-                    self:Reply(sender, isWhisper, "Ви не резервували " .. itemLink .. ".")
+                    if targetPlayer == sender then
+                        self:Reply(sender, isWhisper, format(self.L.WHISPER_NOT_RESERVED, itemLink))
+                    else
+                        self:Reply(sender, isWhisper, format(self.L.WHISPER_TARGET_NOT_RESERVED, targetPlayer, itemLink))
+                    end
                 end
             else
-                self:Reply(sender, isWhisper, "У вас немає зареєстрованих софтів.")
+                if targetPlayer == sender then
+                    self:Reply(sender, isWhisper, self.L.WHISPER_NO_SRS_SHORT)
+                else
+                    self:Reply(sender, isWhisper, format(self.L.WHISPER_TARGET_NO_SRS, targetPlayer))
+                end
             end
         else
-            self:Reply(sender, isWhisper, "Помилка: неможливо розпізнати предмет.")
+            self:Reply(sender, isWhisper, self.L.WHISPER_ERR_UNKNOWN_ITEM)
         end
         return
     end
 
-    if not self.db.reserves[sender] or #self.db.reserves[sender] == 0 then
-        self:Reply(sender, isWhisper, "Немає що очищати.")
+    if not self.db.reserves[targetPlayer] or #self.db.reserves[targetPlayer] == 0 then
+        if targetPlayer == sender then
+            self:Reply(sender, isWhisper, self.L.WHISPER_NOTHING_TO_CLEAR)
+        else
+            self:Reply(sender, isWhisper, format(self.L.WHISPER_TARGET_NO_SRS, targetPlayer))
+        end
         return
     end
-    self:ClearPlayerSR(sender)
-    self:Reply(sender, isWhisper, "Ваші софт-роли було успішно очищено.")
-    self:Print(sender .. " очистив свої софт-роли.")
+    self:ClearPlayerSR(targetPlayer)
+    if targetPlayer == sender then
+        self:Reply(sender, isWhisper, self.L.WHISPER_CLEAR_SUCCESS)
+        self:Print(sender .. " очистив свої софт-роли.")
+    else
+        self:Reply(sender, isWhisper, format(self.L.WHISPER_CLEAR_FOR_TARGET, targetPlayer))
+        self:Reply(targetPlayer, true, format(self.L.WHISPER_RL_CLEARED_ALL, sender))
+        self:Print(sender .. " очистив софт-роли для " .. targetPlayer .. ".")
+    end
 end
 
 --------------------------------------------------------------
@@ -225,19 +285,21 @@ end
 --------------------------------------------------------------
 function SR:CmdRegister(args, sender, isWhisper)
     if not self.sessionActive then
-        self:Reply(sender, isWhisper, "Сесія софт-ролів ще не розпочалась.")
+        self:Reply(sender, isWhisper, self.L.WHISPER_SESSION_NOT_ACTIVE)
         return
     end
 
     if self.locked or self.sessionLocked then
-        self:Reply(sender, isWhisper, "Реєстрація софт-ролів наразі ЗАБЛОКОВАНА. Спробуйте пізніше.")
+        self:Reply(sender, isWhisper, self.L.WHISPER_REGISTER_LOCKED)
         return
     end
+
+    local senderCanEdit = (sender == self.sessionHost or sender == self:GetLocalPlayerName() or self:IsCoHost(sender))
 
     local itemLink = args:match("(|c%x+|Hitem:.-%|h%[.-%]|h|r)")
     if not itemLink then
         self:Reply(sender, isWhisper,
-            "Помилка: Посилання на предмет не знайдено. Використання: sr [ЛінкНаПредмет] або sr [ЛінкНаПредмет] x2")
+            "Помилка: Посилання на предмет не знайдено. " .. self.L.WHISPER_USAGE_REGISTER)
         return
     end
 
@@ -252,15 +314,34 @@ function SR:CmdRegister(args, sender, isWhisper)
     local possibleName = remainingArgs:match("^(%S+)")
     
     if possibleName and possibleName ~= "" then
-        if self:CanEditSession() then
-            -- Форматуємо ім'я гравця (перша велика, інші малі)
-            targetPlayer = possibleName:sub(1,1):upper() .. possibleName:sub(2):lower()
-            if not self:IsInRaid(targetPlayer) then
-                self:Reply(sender, isWhisper, "Помилка: Гравця '" .. targetPlayer .. "' немає у рейді.")
+        if senderCanEdit then
+            local foundName = nil
+            local lowerInput = possibleName:lower()
+            local members = self:GetRaidMembers()
+            for _, m in ipairs(members) do
+                if m.name == possibleName or m.name:lower() == lowerInput then
+                    foundName = m.name
+                    break
+                end
+            end
+            if not foundName and self:IsInRaid(possibleName) then
+                foundName = possibleName
+            end
+            if not foundName then
+                local asciiCapitalized = possibleName:match("^%a+$") and (possibleName:sub(1,1):upper() .. possibleName:sub(2):lower())
+                if asciiCapitalized and self:IsInRaid(asciiCapitalized) then
+                    foundName = asciiCapitalized
+                end
+            end
+
+            if foundName then
+                targetPlayer = foundName
+            else
+                self:Reply(sender, isWhisper, format(self.L.WHISPER_ERR_NOT_IN_RAID, possibleName))
                 return
             end
         else
-            self:Reply(sender, isWhisper, "Помилка: Тільки РЛ або помічник може додавати софт-роли іншим гравцям.")
+            self:Reply(sender, isWhisper, self.L.WHISPER_ERR_NOT_AUTHORIZED_ADD)
             return
         end
     end
@@ -275,21 +356,18 @@ function SR:CmdRegister(args, sender, isWhisper)
         
         if targetPlayer == sender then
             self:Reply(sender, isWhisper,
-                "Софт-рол зареєстровано: " .. itemLink .. cx
-                .. " (" .. newUsed .. " з " .. limit .. " використано). Роль: " .. self.ROLE_LABELS[role] .. overrideNote)
+                format(self.L.WHISPER_REGISTER_ROLE, itemLink, cx, newUsed, limit, self.ROLE_LABELS[role], overrideNote))
             self:Print(sender .. " зареєстрував софт-рол: " .. itemLink .. cx
                 .. " (" .. newUsed .. "/" .. limit .. ")")
         else
             self:Reply(sender, isWhisper,
-                "Софт-рол зареєстровано ДЛЯ " .. targetPlayer .. ": " .. itemLink .. cx
-                .. " (" .. newUsed .. " з " .. limit .. ").")
+                format(self.L.WHISPER_REGISTER_FOR_TARGET, targetPlayer, itemLink, cx, newUsed, limit))
             self:Reply(targetPlayer, true,
-                "РЛ (" .. sender .. ") додав вам софт-рол: " .. itemLink .. cx
-                .. " (" .. newUsed .. " з " .. limit .. ").")
+                format(self.L.WHISPER_RL_ADDED_SR, sender, itemLink, cx, newUsed, limit))
             self:Print(sender .. " зареєстрував софт-рол для " .. targetPlayer .. ": " .. itemLink .. cx)
         end
     else
-        self:Reply(sender, isWhisper, "Помилка: " .. (err or "Невідома помилка."))
+        self:Reply(sender, isWhisper, format(self.L.WHISPER_ERR_PREFIX, err or "Невідома помилка."))
     end
 end
 

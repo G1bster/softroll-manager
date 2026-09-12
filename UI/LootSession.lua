@@ -133,11 +133,17 @@ function SR:BuildLootSession(parent)
     local sf = CreateFrame("ScrollFrame", "SRLootScroll", parent, "UIPanelScrollFrameTemplate")
     sf:SetPoint("TOPLEFT", 6, -118)
     sf:SetPoint("BOTTOMRIGHT", -28, 42)
+    sf:SetScript("OnSizeChanged", function(self)
+        if SR.lootChild then
+            SR.lootChild:SetWidth(self:GetWidth())
+        end
+    end)
 
     local child = CreateFrame("Frame", nil, sf)
-    child:SetWidth(sf:GetWidth())
+    child:SetWidth(sf:GetWidth() > 0 and sf:GetWidth() or 462)
     child:SetHeight(1)
     sf:SetScrollChild(child)
+    self.lootScroll = sf
     self.lootChild = child
     self.lootRows  = {}
 
@@ -229,12 +235,20 @@ function SR:SetLootItem(input)
     end
 
     if not link then
-        self:Print("Не вдалося визначити предмет. Переконайтеся, що ви зробили Shift-клік на правильний лінк.")
+        self:Print(self.L.PRINT_ITEM_NOT_FOUND_SHIFT)
         return
     end
 
     local itemID = self:GetItemIDFromLink(link)
     if not itemID then return end
+
+    -- Якщо змінився предмет, очищуємо активні та попередні роли
+    if self.activeRollItem and self.activeRollItem ~= itemID then
+        self.activeRollItem = nil
+        self.activeRolls = {}
+    end
+    self.lastRollItem = nil
+    self.lastRolls = nil
 
     -- Кешування предмета
     self.currentLootItemID   = itemID
@@ -265,6 +279,10 @@ end
 function SR:ClearLootItem()
     self.currentLootItemID   = nil
     self.currentLootItemLink = nil
+    self.activeRollItem      = nil
+    self.activeRolls         = {}
+    self.lastRollItem        = nil
+    self.lastRolls           = nil
     self.lootIconTex:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
     self.lootIconBtn.link = nil
     self.lootItemLabel:SetText("")
@@ -279,6 +297,9 @@ end
 --------------------------------------------------------------
 function SR:UpdateLootSession()
     if not self.lootChild then return end
+    if self.lootScroll and self.lootScroll:GetWidth() > 0 then
+        self.lootChild:SetWidth(self.lootScroll:GetWidth())
+    end
 
     if self.lootRollToggleBtn then
         if self.activeRollItem then
@@ -286,6 +307,13 @@ function SR:UpdateLootSession()
         else
             self.lootRollToggleBtn:SetText("Почати рол (/rw)")
         end
+    end
+
+    local displayedRolls = {}
+    if self.activeRollItem and self.activeRollItem == self.currentLootItemID then
+        displayedRolls = self.activeRolls or {}
+    elseif self.lastRollItem and self.lastRollItem == self.currentLootItemID then
+        displayedRolls = self.lastRolls or {}
     end
 
     local players = {}
@@ -298,7 +326,7 @@ function SR:UpdateLootSession()
         end
     end
 
-    for pName, _ in pairs(self.activeRolls) do
+    for pName, _ in pairs(displayedRolls) do
         local isSR = false
         for _, p in ipairs(players) do
             if p.name == pName then
@@ -325,6 +353,23 @@ function SR:UpdateLootSession()
         if a.count > 0 and b.count == 0 then return true end
         if a.count == 0 and b.count > 0 then return false end
         
+        -- Потім якщо є роли, сортуємо за найвищим ролом
+        local maxA = -1
+        if displayedRolls[a.name] then
+            for _, r in ipairs(displayedRolls[a.name]) do
+                if r > maxA then maxA = r end
+            end
+        end
+        local maxB = -1
+        if displayedRolls[b.name] then
+            for _, r in ipairs(displayedRolls[b.name]) do
+                if r > maxB then maxB = r end
+            end
+        end
+        if maxA ~= maxB then
+            return maxA > maxB
+        end
+
         -- Потім сортуємо за роллю (РЛ -> Танки -> Хіли -> ДД)
         local wa = SR:GetRoleSortWeight(a.name, ranks[a.name] or 0)
         local wb = SR:GetRoleSortWeight(b.name, ranks[b.name] or 0)
@@ -339,6 +384,20 @@ function SR:UpdateLootSession()
     else
         self.lootNoResult:Hide()
         self.lootSummary:SetText(srCount .. " гравців зарезервували цей предмет")
+    end
+
+    -- Визначаємо найкращий рол серед претендентів, які мають право на виграш
+    local topRoll = -1
+    local hasSR = (srCount > 0)
+    for _, p in ipairs(players) do
+        if not hasSR or p.count > 0 then
+            local rolls = displayedRolls[p.name]
+            if rolls then
+                for _, r in ipairs(rolls) do
+                    if r > topRoll then topRoll = r end
+                end
+            end
+        end
     end
 
     for i, p in ipairs(players) do
@@ -364,15 +423,26 @@ function SR:UpdateLootSession()
             row.countFS:SetTextColor(1, 0.8, 0)
         end
 
-        if SR.activeRollItem == SR.currentLootItemID and SR.activeRolls[p.name] then
-            local rollsStr = table.concat(SR.activeRolls[p.name], ", ")
+        local pRolls = displayedRolls[p.name]
+        if pRolls and #pRolls > 0 then
+            local rollsStr = table.concat(pRolls, ", ")
             row.rollFS:SetText(rollsStr)
         else
             row.rollFS:SetText("")
         end
 
-        -- Перший претендент - золотий фон
-        if i == 1 then
+        -- Золотий фон лише для реального лідера / переможця (або нічиєї) при наявності ролів
+        local isLeader = false
+        if topRoll > -1 and (not hasSR or p.count > 0) and pRolls then
+            for _, r in ipairs(pRolls) do
+                if r == topRoll then
+                    isLeader = true
+                    break
+                end
+            end
+        end
+
+        if isLeader then
             row.bg:SetVertexColor(0.30, 0.22, 0.04, 0.40)
         else
             row.bg:SetVertexColor(0.11, 0.11, 0.17, (i % 2 == 0) and 0.38 or 0)
@@ -391,7 +461,7 @@ end
 --------------------------------------------------------------
 function SR:AnnounceLootRoll()
     if not self.currentLootItemID or not self.currentLootItemLink then
-        self:Print("Предмет для роздачі не вибрано.")
+        self:Print(self.L.PRINT_NO_ITEM_SELECTED)
         return
     end
 
@@ -399,17 +469,19 @@ function SR:AnnounceLootRoll()
     local chatType = (GetNumRaidMembers() > 0) and "RAID_WARNING" or "SAY"
 
     if chatType == "SAY" then
-        self:Print("Ви не в рейді — використовуємо /say.")
+        self:Print(self.L.PRINT_NOT_IN_RAID_SAY)
     end
 
     self.activeRollItem = self.currentLootItemID
     self.activeRolls = {}
+    self.lastRollItem = nil
+    self.lastRolls = nil
 
     -- Резервна логіка "Немає SR"
     if #players == 0 then
-        SendChatMessage(self.currentLootItemLink .. " не має софт-ролів! Ролимо на мейн спек (/roll)", chatType)
+        SendChatMessage(format(self.L.LOOT_NO_SRS_MS, self.currentLootItemLink), chatType)
     else
-        SendChatMessage("Здобич: " .. self.currentLootItemLink, chatType)
+        SendChatMessage(format(self.L.LOOT_ITEM_HEADER, self.currentLootItemLink), chatType)
 
         -- Формування списку претендентів
         local names = {}
@@ -418,7 +490,7 @@ function SR:AnnounceLootRoll()
             names[#names + 1] = p.name .. cx
         end
 
-        SendChatMessage("Претенденти: " .. table.concat(names, ", ") .. " — роліть (/roll)!", chatType)
+        SendChatMessage(format(self.L.LOOT_ROLL_CANDIDATES, table.concat(names, ", ")), chatType)
     end
 
     if self.UpdateLootSession then self:UpdateLootSession() end

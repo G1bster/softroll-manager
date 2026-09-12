@@ -115,7 +115,7 @@ function SR:CreateUI()
     
     settingsBtn:SetScript("OnClick", function(self)
         if not IsRaidLeader() then
-            SR:Print("Тільки РЛ може призначати помічників.")
+            SR:Print(SR.L.PRINT_ONLY_RL_ASSIGN_COHOST)
             return
         end
         if DropDownList1 and DropDownList1:IsShown() and UIDROPDOWNMENU_OPEN_MENU == coHostDD then
@@ -175,7 +175,7 @@ function SR:CreateUI()
             info.keepShownOnClick = true
             info.checked = SR.db.coHosts[name]
             info.func = function(_, _, _, checked)
-                SR.db.coHosts[name] = checked
+                SR.db.coHosts[name] = (checked == true or checked == 1)
                 SR:BroadcastCoHosts()
             end
             UIDropDownMenu_AddButton(info, level)
@@ -502,13 +502,15 @@ function SR:UpdateAdminReadOnly()
                 level = level or 1
                 if level ~= 1 then return end
                 
+                local selfName = SR:GetLocalPlayerName()
                 local info = UIDropDownMenu_CreateInfo()
                 info.text = "Собі"
-                info.value = SR:GetLocalPlayerName()
-                info.checked = (SR.lbTargetPlayer == nil or SR.lbTargetPlayer == info.value)
+                info.value = selfName
+                info.checked = (SR.lbTargetPlayer == nil or SR.lbTargetPlayer == selfName)
                 info.func = function()
-                    SR.lbTargetPlayer = info.value
+                    SR.lbTargetPlayer = selfName
                     UIDropDownMenu_SetText(SR.lbTargetDD, "Собі")
+                    if SR.UpdateLootBrowserItems then SR:UpdateLootBrowserItems() end
                 end
                 UIDropDownMenu_AddButton(info, level)
 
@@ -521,14 +523,16 @@ function SR:UpdateAdminReadOnly()
                     UIDropDownMenu_AddButton(infoTitle, level)
 
                     for _, m in ipairs(members) do
-                        if m.name ~= SR:GetLocalPlayerName() then
+                        local mName = m.name
+                        if mName ~= selfName then
                             local pInfo = UIDropDownMenu_CreateInfo()
-                            pInfo.text = m.name
-                            pInfo.value = m.name
-                            pInfo.checked = (SR.lbTargetPlayer == m.name)
+                            pInfo.text = mName
+                            pInfo.value = mName
+                            pInfo.checked = (SR.lbTargetPlayer == mName)
                             pInfo.func = function()
-                                SR.lbTargetPlayer = m.name
-                                UIDropDownMenu_SetText(SR.lbTargetDD, m.name)
+                                SR.lbTargetPlayer = mName
+                                UIDropDownMenu_SetText(SR.lbTargetDD, mName)
+                                if SR.UpdateLootBrowserItems then SR:UpdateLootBrowserItems() end
                             end
                             UIDropDownMenu_AddButton(pInfo, level)
                         end
@@ -832,6 +836,9 @@ function SR:ShowExportWindow(formatType)
         editBox:SetFontObject("ChatFontNormal")
         editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
         scrollFrame:SetScrollChild(editBox)
+        scrollFrame:SetScript("OnSizeChanged", function(self)
+            editBox:SetWidth(self:GetWidth() > 0 and self:GetWidth() or 380)
+        end)
 
         f.editBox = editBox
 

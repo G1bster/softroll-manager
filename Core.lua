@@ -177,7 +177,7 @@ function SR:Initialize()
     -- Прогрів кешу предметів для резервів / таблиць здобичі
     self:QueueAllKnownItems()
 
-    self:Print("v" .. self.VERSION .. " завантажено. Введіть |cff00ff00/sr|r, щоб відкрити.")
+    self:Print(format(self.L.PRINT_LOADED, self.VERSION))
 end
 
 --------------------------------------------------------------
@@ -188,25 +188,25 @@ function SR:SlashHandler(msg)
 
     if msg == "reset" then
         if self.sessionActive and not self:IsSessionHost() then
-            SR:Print("Лише активний хост може скидати софт-роли під час сесії.")
+            self:Print(self.L.PRINT_ONLY_HOST_RESET)
         else
             self:ResetAllSR()
         end
     elseif msg == "lock" then
         self.locked = true
-        self:Print("Софт-роли |cffff4444ЗАБЛОКОВАНО|r — нові реєстрації не приймаються.")
+        self:Print(self.L.PRINT_STATUS_LOCKED)
     elseif msg == "unlock" then
         self.locked = false
-        self:Print("Софт-роли |cff44ff44РОЗБЛОКОВАНО|r.")
+        self:Print(self.L.PRINT_STATUS_UNLOCKED)
     elseif msg == "announce" then
         self:AnnounceAllSR()
     elseif msg == "help" then
-        SR:Print("Команди:")
-        self:Print("  |cff00ff00/sr|r — Відкрити/закрити головне вікно")
-        self:Print("  |cff00ff00/sr reset|r — Очистити всі софт-роли")
-        self:Print("  |cff00ff00/sr lock / unlock|r — Заблокувати/розблокувати реєстрацію")
-        self:Print("  |cff00ff00/sr announce|r — Опублікувати всі софти в рейдовий чат")
-        self:Print("  |cff00ff00/sr help|r — Ця довідка")
+        self:Print(self.L.HELP_HEADER)
+        self:Print(self.L.HELP_CMD_OPEN)
+        self:Print(self.L.HELP_CMD_RESET)
+        self:Print(self.L.HELP_CMD_LOCK)
+        self:Print(self.L.HELP_CMD_ANNOUNCE)
+        self:Print(self.L.HELP_CMD_HELP)
     else
         self:ToggleUI()
     end
@@ -251,7 +251,7 @@ function SR:OnGroupRosterUpdate()
         if self.sessionHost ~= localName then
             self.sessionHost = localName
             self.sessionLocked = self.locked
-            self:Print("Ви отримали лідера рейду. Сесію SR автоматично перенесено на вас.")
+            self:Print(self.L.PRINT_RL_TRANSFERRED)
             
             -- Повідомляємо рейд, що ми тепер новий хост
             if self.SendAddonMsg then
@@ -291,7 +291,7 @@ function SR:OnGroupRosterUpdate()
         end
         
         if not hostInGroup or not hostOnline then
-            self:Print("Хост " .. self.sessionHost .. " " .. (not hostInGroup and "покинув групу" or "вийшов з гри") .. ". Сесію призупинено.")
+            self:Print(format(self.L.PRINT_HOST_LEFT, self.sessionHost, not hostInGroup and "покинув групу" or "вийшов з гри"))
             self.sessionActive = false
             self.sessionLocked = false
             self:RefreshSessionUI()
@@ -315,7 +315,7 @@ function SR:OnGroupRosterUpdate()
                 if not found then
                     self.db.coHosts[name] = false
                     changed = true
-                    self:Print("Гравець " .. name .. " втратив права помічника рейду і був видалений з ко-хостів аддону.")
+                    self:Print(format(self.L.PRINT_COHOST_DEMOTED, name))
                 end
             end
         end
@@ -446,7 +446,7 @@ function SR:SetPlayerRole(name, role)
     if self.sessionActive and not self:IsSessionHost() then
         if self:CanEditSession() then
             self:SendAddonMsg("V|" .. name .. "|" .. role, "WHISPER", self.sessionHost)
-            self:Print("Запит на зміну ролі надіслано хосту...")
+            self:Print(self.L.PRINT_ROLE_REQUEST_SENT)
         end
         return
     end
@@ -519,16 +519,16 @@ function SR:SetPlayerOverride(name, maxSRs)
     if self.sessionActive and not self:IsSessionHost() then
         if self:CanEditSession() then
             self:SendAddonMsg("U|" .. name .. "|" .. (maxSRs or 0), "WHISPER", self.sessionHost)
-            self:Print("Запит на зміну ліміту надіслано хосту...")
+            self:Print(self.L.PRINT_LIMIT_REQUEST_SENT)
         end
         return
     end
     if maxSRs and maxSRs > 0 then
         self.db.playerOverrides[name] = maxSRs
-        self:Print("Ліміт SR для " .. name .. " змінено на |cffffcc00x" .. maxSRs .. "|r")
+        self:Print(format(self.L.PRINT_LIMIT_CHANGED, name, maxSRs))
     else
         self.db.playerOverrides[name] = nil
-        self:Print("Ліміт SR для " .. name .. " скинуто до стандартного для ролі")
+        self:Print(format(self.L.PRINT_LIMIT_RESET, name))
     end
     if self.UpdateDashboard then self:UpdateDashboard() end
     if self.UpdateLedger    then self:UpdateLedger()    end
@@ -654,7 +654,7 @@ end
 function SR:ResetAllSR()
     if self.sessionActive and not self:IsSessionHost() then return end
     self.db.reserves = {}
-    self:Print("Всі софти успішно |cffff4444очищено|r.")
+    self:Print(self.L.PRINT_ALL_CLEARED)
     if self.UpdateLedger    then self:UpdateLedger()    end
     if self.UpdateDashboard then self:UpdateDashboard() end
     if self:IsSessionHost() or (self:IsSessionLeader() and not self.sessionActive) then
@@ -907,12 +907,12 @@ function SR:AnnouncePlayer(pName, chatType)
     end
 
     if used == 0 then
-        SendChatMessage(pName .. " — немає софтів" .. missingStr, chatType)
+        SendChatMessage(format(self.L.ANNOUNCE_PLAYER_NO_SR, pName, missingStr), chatType)
         return
     end
 
     -- Відправляємо заголовок гравця
-    SendChatMessage(pName .. " — софти" .. missingStr .. ":", chatType)
+    SendChatMessage(format(self.L.ANNOUNCE_PLAYER_HAS_SR, pName, missingStr), chatType)
     
     -- Кожен предмет окремим повідомленням, щоб обійти ліміт у 255 символів
     for _, e in ipairs(list) do
@@ -925,7 +925,7 @@ end
 function SR:AnnounceAllSR()
     local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
     local inst = self.db.instance or "ICC"
-    SendChatMessage("Всі софт-роли (" .. (self.INSTANCE_LABELS[inst] or inst) .. "):", chatType)
+    SendChatMessage(format(self.L.ANNOUNCE_ALL_HEADER, (self.INSTANCE_LABELS[inst] or inst)), chatType)
     
     local names = {}
     for i = 1, GetNumRaidMembers() do
@@ -944,13 +944,13 @@ function SR:AnnounceAllSR()
         end
     end
     if count == 0 then
-        SendChatMessage("Список порожній.", chatType)
+        SendChatMessage(self.L.ANNOUNCE_ALL_EMPTY, chatType)
     end
 end
 
 function SR:AnnounceMissingSR()
     local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
-    SendChatMessage("Гравці з неповними софт-ролами:", chatType)
+    SendChatMessage(self.L.ANNOUNCE_MISSING_HEADER, chatType)
     
     local names = {}
     for i = 1, GetNumRaidMembers() do
@@ -970,7 +970,7 @@ function SR:AnnounceMissingSR()
         end
     end
     if count == 0 then
-        SendChatMessage("Всі вибрали софти повністю.", chatType)
+        SendChatMessage(self.L.ANNOUNCE_MISSING_NONE, chatType)
     end
 end
 
@@ -982,11 +982,11 @@ end
 function SR:AnnounceBossItems(bossName, items)
     local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
     if not items or #items == 0 then
-        SendChatMessage(bossName .. " — немає зареєстрованих софт-ролів", chatType)
+        SendChatMessage(format(self.L.ANNOUNCE_BOSS_EMPTY, bossName), chatType)
         return
     end
 
-    SendChatMessage(bossName .. " — софт-роли:", chatType)
+    SendChatMessage(format(self.L.ANNOUNCE_BOSS_HEADER, bossName), chatType)
     for _, e in ipairs(items) do
         local link = e.itemLink or ("[Item " .. (e.itemID or "?") .. "]")
         local countStr = (e.count and e.count > 1) and (" (x" .. e.count .. ")") or ""
@@ -1061,31 +1061,47 @@ function SR:EndLootRoll()
     if not self.activeRollItem then return end
 
     local chatType = (GetNumRaidMembers() > 0) and "RAID" or "SAY"
+    local srPlayers = self:GetPlayersWithSR(self.activeRollItem)
+    local hasSR = (#srPlayers > 0)
+
+    local eligibleNames = {}
+    if hasSR then
+        for _, p in ipairs(srPlayers) do
+            eligibleNames[p.name] = true
+        end
+    end
+
     local bestRoll = -1
     local winners = {}
 
     for pName, rolls in pairs(self.activeRolls) do
-        for _, r in ipairs(rolls) do
-            if r > bestRoll then
-                bestRoll = r
+        if not hasSR or eligibleNames[pName] then
+            local pBest = -1
+            for _, r in ipairs(rolls) do
+                if r > pBest then pBest = r end
+            end
+            if pBest > bestRoll then
+                bestRoll = pBest
                 winners = { pName }
-            elseif r == bestRoll then
+            elseif pBest == bestRoll and bestRoll > -1 then
                 table.insert(winners, pName)
             end
         end
     end
 
     if bestRoll == -1 then
-        SendChatMessage("Рол завершено! Ніхто не кинув /roll.", chatType)
+        SendChatMessage(self.L.ROLL_NO_ROLLS, chatType)
     else
         local winnerNames = table.concat(winners, ", ")
         if #winners > 1 then
-            SendChatMessage("Рол завершено! Нічия між " .. winnerNames .. " (Рол: " .. bestRoll .. "). Перероліть!", chatType)
+            SendChatMessage(format(self.L.ROLL_TIE, winnerNames, bestRoll), chatType)
         else
-            SendChatMessage("Рол завершено! Переможець: " .. winnerNames .. " (Рол: " .. bestRoll .. ")!", chatType)
+            SendChatMessage(format(self.L.ROLL_WINNER, winnerNames, bestRoll), chatType)
         end
     end
 
+    self.lastRollItem = self.activeRollItem
+    self.lastRolls = self.activeRolls
     self.activeRollItem = nil
     self.activeRolls = {}
     if self.UpdateLootSession then self:UpdateLootSession() end

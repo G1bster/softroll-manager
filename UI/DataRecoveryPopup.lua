@@ -132,13 +132,15 @@ function SR:BuildRecoveryPopup()
         end
 
         for _, resp in ipairs(rows) do
+            local sourceName = resp.name
+            local itemText = resp.name .. " (" .. resp.count .. " гравців)"
             local info = UIDropDownMenu_CreateInfo()
-            info.text = resp.name .. " (" .. resp.count .. " гравців)"
-            info.value = resp.name
-            info.checked = (popup.selectedSource == resp.name)
+            info.text = itemText
+            info.value = sourceName
+            info.checked = (popup.selectedSource == sourceName)
             info.func = function()
-                popup.selectedSource = resp.name
-                UIDropDownMenu_SetText(sourceDD, info.text)
+                popup.selectedSource = sourceName
+                UIDropDownMenu_SetText(sourceDD, itemText)
             end
             UIDropDownMenu_AddButton(info, level)
         end
@@ -152,7 +154,7 @@ function SR:BuildRecoveryPopup()
     requestBtn:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -16, 16)
     requestBtn:SetScript("OnClick", function()
         if not popup.selectedSource then
-            SR:Print("Спершу оберіть джерело зі списку.")
+            SR:Print(SR.L.PRINT_RECOVERY_SELECT_SOURCE)
             return
         end
         popup.statusFS:SetText("Запитую копію в |cffffcc00" .. popup.selectedSource .. "|r...")

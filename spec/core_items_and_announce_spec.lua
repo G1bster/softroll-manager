@@ -345,6 +345,58 @@ describe("SR item cache, announcements, roll tracker, and slash handler (Core.lu
             assert.matches("Ann", msg)
             assert.matches("Boris", msg)
         end)
+
+        it("EndLootRoll does not cause a player rolling identical numbers on multiple SRs to tie with themselves", function()
+            SR:AddSR("Ann", ITEM_LINK, 2)
+            SR.activeRollItem = 49978
+            SR:ProcessRoll("Ann", 90)
+            SR:ProcessRoll("Ann", 90)
+
+            SR:EndLootRoll()
+
+            local msg = wow.state.sentChat[#wow.state.sentChat].msg
+            assert.matches("Переможець: Ann", msg)
+            assert.is_nil(msg:match("Нічия"))
+        end)
+
+        it("EndLootRoll only allows players with SR to win when reservations exist", function()
+            SR:AddSR("Ann", ITEM_LINK, 1)
+            -- Boris does not have an SR on ITEM_LINK
+            SR.activeRollItem = 49978
+            SR:ProcessRoll("Ann", 50)
+            SR:ProcessRoll("Boris", 100) -- Boris rolls higher but has no SR
+
+            SR:EndLootRoll()
+
+            local msg = wow.state.sentChat[#wow.state.sentChat].msg
+            assert.matches("Переможець: Ann", msg)
+            assert.is_nil(msg:match("Boris"))
+        end)
+
+        it("EndLootRoll allows any roller to win when no SRs exist on the item (MS roll)", function()
+            -- No SR added for ITEM_LINK
+            SR.activeRollItem = 49978
+            SR:ProcessRoll("Ann", 50)
+            SR:ProcessRoll("Boris", 85)
+
+            SR:EndLootRoll()
+
+            local msg = wow.state.sentChat[#wow.state.sentChat].msg
+            assert.matches("Переможець: Boris", msg)
+        end)
+
+        it("EndLootRoll stores lastRollItem and lastRolls to preserve results in the UI", function()
+            SR:AddSR("Ann", ITEM_LINK, 1)
+            SR.activeRollItem = 49978
+            SR:ProcessRoll("Ann", 95)
+
+            SR:EndLootRoll()
+
+            assert.are.equal(49978, SR.lastRollItem)
+            assert.same({ 95 }, SR.lastRolls["Ann"])
+            assert.is_nil(SR.activeRollItem)
+            assert.same({}, SR.activeRolls)
+        end)
     end)
 
     describe("SlashHandler", function()
