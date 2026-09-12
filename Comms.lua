@@ -317,8 +317,9 @@ function SR:OnAddonMessage(message, channel, sender)
                     self:Print("Ко-хост " .. senderName .. " змінив налаштування підземелля.")
                     self:SendAddonMsg("I|" .. inst .. "|" .. mode, "RAID")
                 end
-            else
-                -- Клієнт: приймаємо зміни від хоста
+            elseif senderName == self.sessionHost then
+                -- Клієнт: приймаємо зміни лише від поточного хоста сесії
+                -- (інакше будь-хто в рейді міг би підмінити підземелля/режим).
                 self.db.instance = inst
                 self.db.srMode = mode
                 if self.UpdateDashboard then self:UpdateDashboard() end
@@ -601,6 +602,16 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
         -- Адмін може реєструвати навіть без активної сесії — авто-стартуємо
         if self:IsAdmin() then
             self:AutoStartSession()
+            -- AutoStartSession() завжди стартує ЗАБЛОКОВАНОЮ (це правильно для
+            -- автостарту при вході в рейд), але тут адмін явно намагається щось
+            -- зареєструвати прямо зараз — інакше ця ж реєстрація одразу
+            -- провалиться з "ЗАБЛОКОВАНІ". Розблоковуємо, якщо старт вдався.
+            if self:IsSessionHost() then
+                self.locked        = false
+                self.sessionLocked = false
+                self.db.locked     = false
+                self:BroadcastLockState()
+            end
         else
             self:Print("Немає активної сесії SR.")
             return
@@ -633,6 +644,13 @@ function SR:RequestSRFromUI(itemID, count, targetPlayer, isSet)
             self:Print("Помилка реєстрації SR: " .. (err or "Невідома помилка."))
             return false, err
         end
+    end
+
+    if not self.sessionHost then
+        -- IsAdmin() був true, але AutoStartSession() все одно не стартував
+        -- (наприклад, офіцер рейду без прав лідера) — сесії й досі немає.
+        self:Print("Немає активної сесії SR.")
+        return
     end
 
     -- Клієнт → хост через приватне повідомлення аддона
@@ -804,7 +822,15 @@ function SR:OnWipeAll(senderName)
         end
         return
     end
-    if self.sessionActive and self.sessionHost and senderName ~= self.sessionHost then return end
+    -- Довіряємо лише поточному хосту сесії; якщо ж локально ще не зафіксовано
+    -- жодного хоста (наприклад, одразу після /reload, до першого "S|"),
+    -- підстраховуємось перевіркою реальних прав лідера рейду/паті — інакше
+    -- будь-хто міг би підробити "W" і очистити дані клієнта.
+    if self.sessionHost then
+        if senderName ~= self.sessionHost then return end
+    elseif not self:PlayerHasLeaderAuthority(senderName) then
+        return
+    end
     wipe(self.db.reserves)
     wipe(self.db.roles)
     self:RefreshSessionUI()

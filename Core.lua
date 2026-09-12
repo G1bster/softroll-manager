@@ -396,8 +396,19 @@ function SR:GetRaidMembers()
 end
 
 function SR:IsInRaid(playerName)
-    for i = 1, GetNumRaidMembers() do
-        if (GetRaidRosterInfo(i)) == playerName then return true end
+    if GetNumRaidMembers() > 0 then
+        for i = 1, GetNumRaidMembers() do
+            if (GetRaidRosterInfo(i)) == playerName then return true end
+        end
+        return false
+    end
+
+    -- Рейд не сформовано — рахуємо паті/соло гравця членом групи так само,
+    -- як це вже робить GetRaidMembers(), інакше реєстрація SR (яка спирається
+    -- на IsInRaid) ніколи не проходить для звичайної паті на 5 осіб.
+    if playerName == self:GetLocalPlayerName() then return true end
+    for i = 1, GetNumPartyMembers() do
+        if self:StripRealm(GetUnitName("party" .. i, true)) == playerName then return true end
     end
     return false
 end
