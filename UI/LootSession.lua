@@ -517,20 +517,9 @@ end
 
 
 --------------------------------------------------------------
--- ОНОВЛЕННЯ СЕСІЇ ЗДОБИЧІ
+-- ОНОВЛЕННЯ ПАНЕЛІ РОЗРОЛУ (UI)
 --------------------------------------------------------------
-function SR:UpdateLootSession()
-    if not self.lootChild then return end
-
-    if not self.lootSessionMode or (not self.activeRollItem and self.lootSessionMode ~= "roll") then
-        self:SetLootSessionMode("bag")
-        return
-    end
-
-    if self.lootSessionMode == "bag" then
-        self:RefreshBagLoot()
-        return
-    end
+function SR:UpdateLootRollUI()
     if not self.lootChild then return end
     if self.lootScroll and self.lootScroll:GetWidth() > 0 then
         self.lootChild:SetWidth(self.lootScroll:GetWidth())

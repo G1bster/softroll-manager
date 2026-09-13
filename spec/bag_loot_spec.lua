@@ -61,6 +61,22 @@ describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSessi
             assert.are.equal(40, mins2)
             assert.are.equal("40 хв", text2)
         end)
+
+        it("detects soulbound status correctly", function()
+            wow.addBagItem(0, 1, 49978, 1, nil, true) -- soulbound without trade timer
+            local mins1, _, isSoulbound1 = SR:GetContainerItemTradeTime(0, 1)
+            assert.is_nil(mins1)
+            assert.is_true(isSoulbound1)
+
+            wow.addBagItem(0, 2, 49978, 1, nil, false) -- unbound BoE item
+            local _, _, isSoulbound2 = SR:GetContainerItemTradeTime(0, 2)
+            assert.is_false(isSoulbound2)
+
+            wow.addBagItem(0, 3, 49978, 1, "1h 30m", true) -- soulbound BoP with active trade timer
+            local mins3, _, isSoulbound3 = SR:GetContainerItemTradeTime(0, 3)
+            assert.are.equal(90, mins3)
+            assert.is_true(isSoulbound3)
+        end)
     end)
 
     describe("ScanBagsForLoot", function()
@@ -163,6 +179,19 @@ describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSessi
             assert.are.equal(115, loot[1].tradeMins)
             assert.are.equal(1, loot[1].srCount)
         end)
+
+        it("includes unbound BoE items but excludes equipped soulbound BoE items", function()
+            -- Slot 1: Unbound BoE belt (not soulbound, drops in ICC) -> INCLUDED
+            wow.addBagItem(0, 1, 49978, 1, nil, false)
+
+            -- Slot 2: Previously equipped BoE boots (now soulbound without timer) -> EXCLUDED
+            wow.addBagItem(0, 2, 49983, 1, nil, true)
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(1, #loot)
+            assert.are.equal(49978, loot[1].itemID)
+            assert.are.equal(1, loot[1].slot)
+        end)
     end)
 
     describe("SetLootSessionMode and SetLootItem", function()
@@ -199,6 +228,34 @@ describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSessi
             assert.is_nil(SR.currentLootItemLink)
             assert.is_nil(SR.activeRollItem)
             assert.are.equal(0, #SR.activeRolls)
+        end)
+
+        it("defaults to bag mode in UpdateLootSession when no roll is active", function()
+            SR.lootSessionMode = nil
+            SR.activeRollItem = nil
+            SR:UpdateLootSession()
+            assert.are.equal("bag", SR.lootSessionMode)
+        end)
+
+        it("stays in roll mode in UpdateLootSession when a roll is currently active", function()
+            SR:SetLootSessionMode("roll")
+            SR.activeRollItem = 49978
+            SR:UpdateLootSession()
+            assert.are.equal("roll", SR.lootSessionMode)
+        end)
+    end)
+
+    describe("Locales string completeness", function()
+        it("defines all required BAG_LOOT, TAB, and UI locale keys", function()
+            assert.are.equal("string", type(SR.L.BAG_LOOT_TAB))
+            assert.are.equal("string", type(SR.L.BAG_LOOT_ACTIVE_ROLL))
+            assert.are.equal("string", type(SR.L.BAG_LOOT_BACK_TO_BAGS))
+            assert.are.equal("string", type(SR.L.BAG_LOOT_REFRESH))
+            assert.are.equal("string", type(SR.L.BAG_LOOT_DISTRIBUTE_BTN))
+            assert.are.equal("string", type(SR.L.TAB_SESSION))
+            assert.are.equal("string", type(SR.L.UI_START_ROLL_BTN))
+            assert.are.equal("string", type(SR.L.UI_END_ROLL_BTN))
+            assert.are.equal("string", type(SR.L.LOOT_RESERVED_SUMMARY))
         end)
     end)
 end)

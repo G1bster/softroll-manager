@@ -1256,6 +1256,23 @@ function SR:SetLootSessionMode(mode)
     end
 end
 
+--- Оновлює стан сесії здобичі (за замовчуванням показує сумки, або активний розрол)
+function SR:UpdateLootSession()
+    if not self.lootSessionMode or (not self.activeRollItem and self.lootSessionMode ~= "roll") then
+        self:SetLootSessionMode("bag")
+        return
+    end
+
+    if self.lootSessionMode == "bag" then
+        if self.RefreshBagLoot then self:RefreshBagLoot() end
+        return
+    end
+
+    if self.UpdateLootRollUI then
+        self:UpdateLootRollUI()
+    end
+end
+
 --- Встановлює поточний предмет для розролу
 function SR:SetLootItem(input)
     if not input or input == "" then return end
