@@ -62,6 +62,28 @@ describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSessi
             assert.are.equal("40 хв", text2)
         end)
 
+        it("does not crash when the client's BIND_TRADE_TIME_REMAINING string contains unescaped Lua pattern characters", function()
+            -- A literal, unbalanced '(' here would blow up string.match with
+            -- "unfinished capture" if the code builds a Lua pattern from this
+            -- string without first escaping its magic characters. The mock's
+            -- actual tooltip line still says "trade this item ... for 1h 20m.",
+            -- so detection should still succeed via the hardcoded fallback text
+            -- match even though this (deliberately mismatched) primary pattern
+            -- doesn't match it.
+            local original = _G.BIND_TRADE_TIME_REMAINING
+            _G.BIND_TRADE_TIME_REMAINING = "You may trade this item (with restrictions for %s."
+            wow.addBagItem(0, 1, 49978, 1, "1h 20m")
+
+            local mins, text
+            assert.has_no.errors(function()
+                mins, text = SR:GetContainerItemTradeTime(0, 1)
+            end)
+            assert.are.equal(80, mins)
+            assert.are.equal("1г 20хв", text)
+
+            _G.BIND_TRADE_TIME_REMAINING = original
+        end)
+
         it("detects soulbound status correctly", function()
             wow.addBagItem(0, 1, 49978, 1, nil, true) -- soulbound without trade timer
             local mins1, _, isSoulbound1 = SR:GetContainerItemTradeTime(0, 1)
@@ -242,6 +264,43 @@ describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSessi
             SR.activeRollItem = 49978
             SR:UpdateLootSession()
             assert.are.equal("roll", SR.lootSessionMode)
+        end)
+    end)
+
+    describe("InitBagLootTicker (periodic trade-timer refresh)", function()
+        it("does not refresh when the bag loot tab isn't visible", function()
+            local called = false
+            SR.RefreshBagLoot = function() called = true end
+
+            SR:InitBagLootTicker()
+            local onUpdate = SR.bagLootTickerFrame._script_OnUpdate
+            onUpdate(SR.bagLootTickerFrame, 31) -- past the interval, but nothing is shown
+
+            assert.is_false(called)
+        end)
+
+        it("refreshes once elapsed time crosses the interval while the tab is visible", function()
+            local called = 0
+            SR.RefreshBagLoot = function() called = called + 1 end
+            SR.mainFrame = { IsShown = function() return true end }
+            SR.panels = { [4] = { IsShown = function() return true end } }
+            SR.lootSessionMode = "bag"
+
+            SR:InitBagLootTicker()
+            local onUpdate = SR.bagLootTickerFrame._script_OnUpdate
+
+            onUpdate(SR.bagLootTickerFrame, 10)
+            assert.are.equal(0, called) -- not yet past the 30s interval
+
+            onUpdate(SR.bagLootTickerFrame, 21) -- accumulated 31s
+            assert.are.equal(1, called)
+        end)
+
+        it("does not build a second ticker frame if called twice", function()
+            SR:InitBagLootTicker()
+            local first = SR.bagLootTickerFrame
+            SR:InitBagLootTicker()
+            assert.are.equal(first, SR.bagLootTickerFrame)
         end)
     end)
 

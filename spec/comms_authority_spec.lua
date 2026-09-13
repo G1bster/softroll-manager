@@ -211,4 +211,60 @@ describe("SR session authority and message-sender validation (Comms.lua)", funct
             assert.is_nil(SR.sessionCoHosts)
         end)
     end)
+
+    describe("Anti-spoofing before any host is known yet (fresh login, no 'S|' received)", function()
+        -- sessionHost is still nil here — this is the narrow window right after
+        -- logging in, before the host's whispered reply to our own 'H' arrives.
+        -- Session messages must fall back to requiring real raid/party leader
+        -- authority in this window, not trust whoever happens to speak first.
+        before_each(function()
+            SR:InitItemCache()
+            wow.addRaidMember("RealLeader", 2)
+            wow.addRaidMember("Impostor", 0)
+        end)
+
+        it("rejects a Y sync update from a random member", function()
+            SR:OnAddonMessage("Y|Someone|TANK|49978:2", "RAID", "Impostor")
+            assert.is_nil(SR.db.reserves["Someone"])
+        end)
+
+        it("accepts a Y sync update from the real raid leader", function()
+            SR:OnAddonMessage("Y|Someone|TANK|49978:2", "RAID", "RealLeader")
+            assert.is_not_nil(SR.db.reserves["Someone"])
+        end)
+
+        it("rejects an O co-host list from a random member", function()
+            SR:OnAddonMessage("O|Impostor", "RAID", "Impostor")
+            assert.is_nil(SR.sessionCoHosts)
+        end)
+
+        it("accepts an O co-host list from the real raid leader", function()
+            SR:OnAddonMessage("O|RealLeader", "RAID", "RealLeader")
+            assert.is_not_nil(SR.sessionCoHosts)
+        end)
+
+        it("rejects an L lock-state change from a random member", function()
+            SR.locked = false
+            SR:OnAddonMessage("L|1", "RAID", "Impostor")
+            assert.is_false(SR.locked)
+        end)
+
+        it("accepts an L lock-state change from the real raid leader", function()
+            SR.locked = false
+            SR:OnAddonMessage("L|1", "RAID", "RealLeader")
+            assert.is_true(SR.locked)
+        end)
+
+        it("rejects a W wipe-all from a random member", function()
+            SR.db.reserves["Existing"] = { { itemID = 1, count = 1 } }
+            SR:OnAddonMessage("W", "RAID", "Impostor")
+            assert.is_not_nil(SR.db.reserves["Existing"])
+        end)
+
+        it("accepts a W wipe-all from the real raid leader", function()
+            SR.db.reserves["Existing"] = { { itemID = 1, count = 1 } }
+            SR:OnAddonMessage("W", "RAID", "RealLeader")
+            assert.is_nil(SR.db.reserves["Existing"])
+        end)
+    end)
 end)

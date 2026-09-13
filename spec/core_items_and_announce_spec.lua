@@ -275,6 +275,23 @@ describe("SR item cache, announcements, roll tracker, and slash handler (Core.lu
             assert.matches("Boris x3", line)
             assert.matches("%(x2%)", line)
         end)
+
+        it("keeps the first reserver on the same chat line even when the item prefix alone is already very long", function()
+            -- Before the fix, the 220-byte chunking check could trip on the very
+            -- first reserver name, sending a dangling "...: " line with nobody
+            -- listed and pushing the first name onto its own separate line.
+            local longLink = string.rep("X", 230)
+            SR:AnnounceBossItems("Test Boss", {
+                { itemLink = longLink, itemID = 1, count = 1, reservers = { "Ann" } },
+            })
+
+            local itemLine = nil
+            for _, c in ipairs(wow.state.sentChat) do
+                if c.msg:find(longLink, 1, true) then itemLine = c.msg end
+            end
+            assert.is_not_nil(itemLine)
+            assert.matches("Ann", itemLine)
+        end)
     end)
 
     describe("ProcessRoll / EndLootRoll", function()

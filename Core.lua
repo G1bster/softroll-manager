@@ -141,12 +141,37 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
+--- Чи зараз видима вкладка "Здобич у сумках" — використовується і подією
+-- BAG_UPDATE, і періодичним тікером нижче, щоб не дублювати умову.
+function SR:IsBagLootTabVisible()
+    return self.mainFrame and self.mainFrame:IsShown()
+        and self.panels and self.panels[4] and self.panels[4]:IsShown()
+        and self.lootSessionMode == "bag"
+end
+
 function SR:OnBagUpdate()
-    if self.mainFrame and self.mainFrame:IsShown() and self.panels and self.panels[4] and self.panels[4]:IsShown() then
-        if self.lootSessionMode == "bag" and self.RefreshBagLoot then
+    if self:IsBagLootTabVisible() and self.RefreshBagLoot then
+        self:RefreshBagLoot()
+    end
+end
+
+--- Таймер передачі відлічує реальний час, а не події зміни сумок — без
+-- періодичного оновлення показаний залишок "застигає" на значенні з моменту
+-- останньої зміни сумок, поки гравець просто дивиться на вкладку.
+local BAG_LOOT_TICK_INTERVAL = 30
+function SR:InitBagLootTicker()
+    if self.bagLootTickerFrame or not CreateFrame then return end
+    local f = CreateFrame("Frame")
+    local elapsed = 0
+    f:SetScript("OnUpdate", function(_, dt)
+        elapsed = elapsed + dt
+        if elapsed < BAG_LOOT_TICK_INTERVAL then return end
+        elapsed = 0
+        if self:IsBagLootTabVisible() and self.RefreshBagLoot then
             self:RefreshBagLoot()
         end
-    end
+    end)
+    self.bagLootTickerFrame = f
 end
 
 function SR:Initialize()
@@ -183,6 +208,7 @@ function SR:Initialize()
     self:CreateUI()
     self:CreateMinimapButton()
     self:InitChatParser()
+    self:InitBagLootTicker()
 
     -- Запит до рейду про активну сесію (обробляє перезавантаження UI під час рейду)
     if self.AnnounceHello then
@@ -1103,7 +1129,11 @@ function SR:AnnounceBossItems(bossName, items)
             local line = prefix
             for i, pStr in ipairs(playersList) do
                 local sep = (i == 1) and "" or ", "
-                if #line + #sep + #pStr > 220 then
+                -- i > 1 гарантує, що перше ім'я завжди потрапляє в початковий
+                -- рядок разом з префіксом — інакше, якщо сам префікс (лінк +
+                -- назва боса) уже близький до ліміту, повідомлення могло б
+                -- піти без жодного імені гравця ("... :" саме по собі).
+                if i > 1 and #line + #sep + #pStr > 220 then
                     SendChatMessage(line, chatType)
                     line = "   " .. pStr
                 else
@@ -1120,11 +1150,8 @@ end
 --------------------------------------------------------------
 -- 14. ЗАГАЛЬНІ УТИЛІТИ
 --------------------------------------------------------------
-function SR:StripRealm(name)
-    if not name then return nil end
-    local base = name:match("^([^%-]+)")
-    return base or name
-end
+-- SR:StripRealm визначено в Comms.lua (яке завантажується одразу після
+-- цього файлу) — тут дублікат прибрано, щоб не розходились дві копії.
 
 function SR:CopyTable(src)
     if type(src) ~= "table" then return src end
@@ -1410,8 +1437,17 @@ function SR:GetContainerItemTradeTime(bag, slot)
 
                 local isTradeLine = false
                 if _G.BIND_TRADE_TIME_REMAINING then
-                    local pat = _G.BIND_TRADE_TIME_REMAINING:gsub("%%s", ".*")
-                    if text:match(pat) then isTradeLine = true end
+                    -- Спершу екрануємо ВСІ спецсимволи Lua-патернів у локалізованому
+                    -- рядку клієнта (дужки, крапки, тире тощо), і лише потім
+                    -- підставляємо групу захоплення замість %s. Без цього кроку
+                    -- будь-який спецсимвол у реальному тексті клієнта (не в тестовому
+                    -- моку, який навмисно "чистий") призвів би до помилки
+                    -- "malformed pattern" і аварійного переривання сканування сумок.
+                    local pat = _G.BIND_TRADE_TIME_REMAINING
+                        :gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+                        :gsub("%%%%s", ".*")
+                    local ok, matched = pcall(string.match, text, pat)
+                    if ok and matched then isTradeLine = true end
                 end
                 if not isTradeLine then
                     local lower = text:lower()

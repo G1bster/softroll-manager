@@ -110,6 +110,19 @@ function SR:PlayerHasLeaderAuthority(name)
     return name == self:GetLocalPlayerName()
 end
 
+--- Довіряти повідомленням сесії (S/L/Y/Z/O тощо) можна лише поточному хосту.
+-- Якщо ж хост локально ще не зафіксований (наприклад, одразу після /reload,
+-- до першої відповіді на "H"), підстраховуємось перевіркою реальних прав
+-- лідера рейду/паті — інакше будь-хто міг би підробити ці повідомлення саме
+-- в те коротке вікно, поки клієнт ще не знає, кому довіряти.
+function SR:IsTrustedSessionSender(senderName)
+    if not senderName then return false end
+    if self.sessionHost then
+        return senderName == self.sessionHost
+    end
+    return self:PlayerHasLeaderAuthority(senderName)
+end
+
 --- Повертає true, якщо гравець у списку Ко-Хостів і є помічником в рейді.
 function SR:IsCoHost(name)
     if not name then return false end
@@ -307,7 +320,7 @@ function SR:OnAddonMessage(message, channel, sender)
     elseif cmd == "E" then
         self:OnSessionEnd(rest, senderName)
     elseif cmd == "L" then
-        if not self.sessionHost or senderName == self.sessionHost then
+        if self:IsTrustedSessionSender(senderName) then
             self:OnSessionLock(rest, senderName)
         end
     elseif cmd == "A" then
@@ -317,21 +330,21 @@ function SR:OnAddonMessage(message, channel, sender)
     elseif cmd == "Q" then
         self:OnSyncRequest(senderName)
     elseif cmd == "Y" then
-        if not self.sessionHost or senderName == self.sessionHost then
+        if self:IsTrustedSessionSender(senderName) then
             self:OnSyncPlayer(rest, senderName)
         end
     elseif cmd == "Z" then
-        if not self.sessionHost or senderName == self.sessionHost then
+        if self:IsTrustedSessionSender(senderName) then
             self:OnSyncComplete(senderName)
         end
     elseif cmd == "P" then
-        if not self.sessionHost or senderName == self.sessionHost or self:IsCoHost(senderName) then
+        if self:IsTrustedSessionSender(senderName) or self:IsCoHost(senderName) then
             self:OnPlayerOverrideSync(rest, senderName)
         end
     elseif cmd == "H" then
         self:OnHello(senderName)
     elseif cmd == "O" then
-        if not self.sessionHost or senderName == self.sessionHost then
+        if self:IsTrustedSessionSender(senderName) then
             self:OnCoHostsUpdate(rest, senderName)
         end
     elseif cmd == "V" then
@@ -384,7 +397,7 @@ function SR:OnAddonMessage(message, channel, sender)
 end
 
 function SR:OnPlayerOverrideSync(data, senderName)
-    if senderName and self.sessionHost and senderName ~= self.sessionHost and not self:IsCoHost(senderName) then return end
+    if senderName and not self:IsTrustedSessionSender(senderName) and not self:IsCoHost(senderName) then return end
     if self:IsSessionHost() then return end
     local pName, limit = data:match("^([^|]+)|(.*)$")
     if pName and limit then
@@ -485,7 +498,7 @@ function SR:OnSessionEnd(_hostName, senderName)
 end
 
 function SR:OnSessionLock(state, senderName)
-    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
+    if senderName and not self:IsTrustedSessionSender(senderName) then return end
     self.sessionLocked = (state == "1")
     if not self:IsSessionHost() then
         self.locked = self.sessionLocked
@@ -574,7 +587,7 @@ function SR:OnSyncRequest(senderName)
 end
 
 function SR:OnSyncPlayer(data, senderName)
-    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
+    if senderName and not self:IsTrustedSessionSender(senderName) then return end
     if self:IsSessionHost() then return end -- хост локально має пріоритет
 
     local pName, role, itemStr = data:match("^([^|]+)|([^|]+)|(.*)$")
@@ -628,7 +641,7 @@ function SR:OnSyncPlayer(data, senderName)
 end
 
 function SR:OnSyncComplete(senderName)
-    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
+    if senderName and not self:IsTrustedSessionSender(senderName) then return end
     if not self._syncPending then return end
 
     -- Прибираємо локально лише тих гравців, кого хост жодного разу не
@@ -648,7 +661,7 @@ function SR:OnSyncComplete(senderName)
 end
 
 function SR:OnCoHostsUpdate(data, senderName)
-    if senderName and self.sessionHost and senderName ~= self.sessionHost then return end
+    if senderName and not self:IsTrustedSessionSender(senderName) then return end
     if self:IsSessionHost() then return end
     self.sessionCoHosts = {}
     if data and data ~= "" then
@@ -926,15 +939,7 @@ function SR:OnWipeAll(senderName)
         end
         return
     end
-    -- Довіряємо лише поточному хосту сесії; якщо ж локально ще не зафіксовано
-    -- жодного хоста (наприклад, одразу після /reload, до першого "S|"),
-    -- підстраховуємось перевіркою реальних прав лідера рейду/паті — інакше
-    -- будь-хто міг би підробити "W" і очистити дані клієнта.
-    if self.sessionHost then
-        if senderName ~= self.sessionHost then return end
-    elseif not self:PlayerHasLeaderAuthority(senderName) then
-        return
-    end
+    if not self:IsTrustedSessionSender(senderName) then return end
     wipe(self.db.reserves)
     wipe(self.db.roles)
     self:RefreshSessionUI()
