@@ -27,12 +27,13 @@ function M.reset()
 end
 
 --- Додає предмет у слот сумки для тестування сканера сумок.
-function M.addBagItem(bag, slot, itemID, count, tradeText)
+function M.addBagItem(bag, slot, itemID, count, tradeText, isSoulbound)
     M.state.bags[bag] = M.state.bags[bag] or {}
     M.state.bags[bag][slot] = {
         itemID = itemID,
         count = count or 1,
         tradeText = tradeText,
+        isSoulbound = isSoulbound,
     }
 end
 
@@ -80,6 +81,9 @@ function M.install()
                 local it = M.state.items[item.itemID]
                 local itemName = it and it.name or ("Item " .. item.itemID)
                 table.insert(frame._lines, itemName)
+                if item.isSoulbound or item.tradeText then
+                    table.insert(frame._lines, "Soulbound")
+                end
                 if item.tradeText then
                     local tradeLine = "You may trade this item with players that were also eligible to loot this item for " .. item.tradeText .. "."
                     table.insert(frame._lines, tradeLine)
@@ -172,6 +176,7 @@ function M.install()
     end
 
     _G.BIND_TRADE_TIME_REMAINING = "You may trade this item with players that were also eligible to loot this item for %s."
+    _G.ITEM_SOULBOUND = "Soulbound"
 
     _G.SendChatMessage = function(msg, chatType, _lang, target)
         table.insert(M.state.sentChat, { msg = msg, chatType = chatType, target = target })

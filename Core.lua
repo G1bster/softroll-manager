@@ -1308,7 +1308,7 @@ function SR:SetLootItem(input)
     end
 
     if self.lootItemLabel then
-        self.lootItemLabel:SetText("Поточний предмет:  " .. link)
+        self.lootItemLabel:SetText(string.format((self.L and self.L.UI_CURRENT_ITEM) or "Поточний предмет: %s", link))
     end
 
     if self.lootItemEditBox then
@@ -1361,20 +1361,36 @@ local function GetScanTooltip()
 end
 
 --- Зчитує залишок 2-годинного таймера передачі предмету в сумці через тултіп.
--- @return totalMinutes (number|nil), formattedText (string|nil)
+-- Також перевіряє, чи предмет є персональним (soulbound).
+-- @return totalMinutes (number|nil), formattedText (string|nil), isSoulbound (boolean)
 function SR:GetContainerItemTradeTime(bag, slot)
     local tip = GetScanTooltip()
-    if not tip or not tip.SetBagItem then return nil, nil end
+    if not tip or not tip.SetBagItem then return nil, nil, false end
 
     tip:ClearLines()
     tip:SetBagItem(bag, slot)
     local numLines = tip:NumLines() or 0
+
+    local isSoulbound = false
+    local tradeMins = nil
+    local tradeFormatted = nil
+    local boundText = _G.ITEM_SOULBOUND
 
     for i = 1, numLines do
         local lineObj = _G["SRBagScanTooltipTextLeft" .. i]
         if lineObj and lineObj.GetText then
             local text = lineObj:GetText()
             if text and text ~= "" then
+                -- Перевірка на персональність предмету (Soulbound)
+                if (boundText and text:find(boundText, 1, true)) or text:find("Soulbound", 1, true) then
+                    isSoulbound = true
+                else
+                    local lower = text:lower()
+                    if lower:find("soulbound") or lower:find("персональн") or lower:find("seelengebunden") or lower:find("lié") or lower:find("ligado") then
+                        isSoulbound = true
+                    end
+                end
+
                 local isTradeLine = false
                 if _G.BIND_TRADE_TIME_REMAINING then
                     local pat = _G.BIND_TRADE_TIME_REMAINING:gsub("%%s", ".*")
@@ -1416,12 +1432,13 @@ function SR:GetContainerItemTradeTime(bag, slot)
                     else
                         formatted = "< 1 хв"
                     end
-                    return totalMins, formatted
+                    tradeMins = totalMins
+                    tradeFormatted = formatted
                 end
             end
         end
     end
-    return nil, nil
+    return tradeMins, tradeFormatted, isSoulbound
 end
 
 --- Сканує всі 5 сумок (0..4) на наявність рейд-луту та повертає відсортований список.
@@ -1446,18 +1463,25 @@ function SR:ScanBagsForLoot()
                         quality = q or 4
                     end
 
-                    local tradeMins, tradeText = self:GetContainerItemTradeTime(bag, slot)
+                    local tradeMins, tradeText, isSoulbound = self:GetContainerItemTradeTime(bag, slot)
                     local srs = self:GetPlayersWithSR(itemID)
                     local srCount = srs and #srs or 0
                     local isRaidItem = (self.IsValidItemForInstance and self:IsValidItemForInstance(itemID, currentInst))
 
-                    -- Включаємо предмет, якщо:
-                    -- 1. На нього є зареєстровані софт-роли, АБО
-                    -- 2. У нього є активний 2-годинний таймер передачі (боп-дроп рейду), АБО
-                    -- 3. Це епічний/легендарний предмет поточного інстансу
-                    local shouldInclude = (srCount > 0)
-                                       or (tradeMins ~= nil)
-                                       or (isRaidItem and quality >= 4)
+                    -- Включаємо предмет, якщо його ДІЙСНО МОЖЛИВО передати:
+                    -- 1. Свіжий BoP-дроп з активним таймером передачі (tradeMins ~= nil).
+                    -- 2. Неперсональний (BoE) предмет рейду або з зареєстрованими софт-ролами (not isSoulbound).
+                    -- КРИТИЧНО: Якщо предмет є персональним (isSoulbound) і НЕ має таймера передачі (tradeMins == nil),
+                    -- це особисте спорядження лідера (наприклад, власна Воля чи офсет у сумці).
+                    -- Такий предмет передати іншим гравцям фізично неможливо, тому він виключається!
+                    local shouldInclude = false
+                    if tradeMins ~= nil then
+                        shouldInclude = true
+                    elseif not isSoulbound then
+                        if (srCount > 0) or (isRaidItem and quality >= 4) then
+                            shouldInclude = true
+                        end
+                    end
 
                     if shouldInclude then
                         table.insert(items, {

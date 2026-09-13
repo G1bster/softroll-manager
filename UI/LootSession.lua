@@ -254,10 +254,10 @@ function SR:BuildLootSession(parent)
     -- ── Повідомлення про відсутність результатів ──
     self.lootNoResult = SR:MakeLabel(rollPanel, 12, 0.35, 0.35, 0.40, "CENTER")
     self.lootNoResult:SetPoint("CENTER", sf, "CENTER", 0, 0)
-    self.lootNoResult:SetText("Ніхто не засофтив цей предмет")
+    self.lootNoResult:SetText(self.L.UI_NO_SRS_FOR_ITEM or "Ніхто не засофтив цей предмет")
     self.lootNoResult:Hide()
 
-    local rollToggleBtn = SR:MakeButton(rollPanel, "Почати рол (/rw)", 180, 28)
+    local rollToggleBtn = SR:MakeButton(rollPanel, self.L.UI_START_ROLL_BTN or "Почати рол (/rw)", 180, 28)
     rollToggleBtn:SetPoint("BOTTOMRIGHT", -8, 10)
     rollToggleBtn:SetScript("OnClick", function()
         if not SR.activeRollItem then
@@ -275,6 +275,9 @@ function SR:BuildLootSession(parent)
     self.lootSummary:SetWordWrap(true)
     self.lootSummary:SetJustifyV("BOTTOM")
     self.lootSummary:SetText("")
+
+    -- За замовчуванням відкриваємо сканер здобичі у сумках
+    self:SetLootSessionMode("bag")
 end
 
 
@@ -519,13 +522,9 @@ end
 function SR:UpdateLootSession()
     if not self.lootChild then return end
 
-    if not self.lootSessionMode then
-        if self.currentLootItemID then
-            self:SetLootSessionMode("roll")
-        else
-            self:SetLootSessionMode("bag")
-            return
-        end
+    if not self.lootSessionMode or (not self.activeRollItem and self.lootSessionMode ~= "roll") then
+        self:SetLootSessionMode("bag")
+        return
     end
 
     if self.lootSessionMode == "bag" then
@@ -539,9 +538,9 @@ function SR:UpdateLootSession()
 
     if self.lootRollToggleBtn then
         if self.activeRollItem then
-            self.lootRollToggleBtn:SetText("Закінчити рол")
+            self.lootRollToggleBtn:SetText(self.L.UI_END_ROLL_BTN or "Завершити рол")
         else
-            self.lootRollToggleBtn:SetText("Почати рол (/rw)")
+            self.lootRollToggleBtn:SetText(self.L.UI_START_ROLL_BTN or "Почати рол (/rw)")
         end
     end
 
@@ -619,7 +618,7 @@ function SR:UpdateLootSession()
         self.lootSummary:SetText("")
     else
         self.lootNoResult:Hide()
-        self.lootSummary:SetText(srCount .. " гравців зарезервували цей предмет")
+        self.lootSummary:SetText(string.format(self.L.LOOT_RESERVED_SUMMARY or "%d гравців зарезервували цей предмет", srCount))
     end
 
     -- Визначаємо найкращий рол серед претендентів, які мають право на виграш

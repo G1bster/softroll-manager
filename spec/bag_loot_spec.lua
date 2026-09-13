@@ -127,6 +127,42 @@ describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSessi
             assert.are.equal(49978, loot[2].itemID)
             assert.are.equal(1, loot[2].srCount)
         end)
+
+        it("excludes personal soulbound gear without trade timer (e.g. leader's own Deathbringer's Will in bag)", function()
+            local ITEM_LINK_DBW = "|cffa335ee|Hitem:50362:0:0:0:0:0:0:0|h[Deathbringer's Will]|h|r"
+            wow.addItem(50362, "Deathbringer's Will", ITEM_LINK_DBW, 4)
+
+            -- Item in bag is soulbound and has no trade timer (leader's personal gear)
+            wow.addBagItem(0, 1, 50362, 1, nil, true)
+
+            -- Even if someone in the raid soft-reserved DBW, the leader's own personal soulbound DBW
+            -- CANNOT be traded, so it must not appear in the loot scanner!
+            SR:AddSR("Member", ITEM_LINK_DBW, 1)
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(0, #loot)
+        end)
+
+        it("includes fresh boss drop Deathbringer's Will that has an active trade timer", function()
+            local ITEM_LINK_DBW = "|cffa335ee|Hitem:50362:0:0:0:0:0:0:0|h[Deathbringer's Will]|h|r"
+            wow.addItem(50362, "Deathbringer's Will", ITEM_LINK_DBW, 4)
+
+            -- Slot 1: Leader's own soulbound DBW (no trade timer) -> EXCLUDED
+            wow.addBagItem(0, 1, 50362, 1, nil, true)
+
+            -- Slot 2: Fresh DBW looted from Deathbringer Saurfang with 1h 55m trade timer -> INCLUDED
+            wow.addBagItem(0, 2, 50362, 1, "1h 55m", true)
+
+            SR:AddSR("Member", ITEM_LINK_DBW, 1)
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(1, #loot)
+            assert.are.equal(0, loot[1].bag)
+            assert.are.equal(2, loot[1].slot)
+            assert.are.equal(50362, loot[1].itemID)
+            assert.are.equal(115, loot[1].tradeMins)
+            assert.are.equal(1, loot[1].srCount)
+        end)
     end)
 
     describe("SetLootSessionMode and SetLootItem", function()

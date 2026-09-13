@@ -80,7 +80,7 @@ function SR:CreateUI()
     end)
     exportBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Експорт софтів")
+        GameTooltip:AddLine(SR.L.UI_EXPORT_TOOLTIP or "Експорт софтів")
         GameTooltip:Show()
     end)
     exportBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -99,16 +99,14 @@ function SR:CreateUI()
         UIDropDownMenu_AddButton(info, level)
     end)
 
+    -----------------------------------------------------------
+    -- КНОПКА НАЛАШТУВАНЬ (шестірня біля експорту)
+    -----------------------------------------------------------
     local settingsBtn = CreateFrame("Button", nil, f)
     settingsBtn:SetSize(24, 24)
     settingsBtn:SetPoint("RIGHT", exportBtn, "LEFT", -4, 0)
-    settingsBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
-    settingsBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+    settingsBtn:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
     settingsBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    local settingsIcon = settingsBtn:CreateTexture(nil, "OVERLAY")
-    settingsIcon:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
-    settingsIcon:SetSize(14, 14)
-    settingsIcon:SetPoint("CENTER", settingsBtn, "CENTER", 0, -1)
     
     local coHostDD = CreateFrame("Frame", "SRCoHostDropDown", f, "UIDropDownMenuTemplate")
     coHostDD:Hide()
@@ -190,7 +188,12 @@ function SR:CreateUI()
     -----------------------------------------------------------
     local tabs     = {}
     local panels   = {}
-    local tabNames = { "Панель керування", "Список софтів", "Огляд луту", "Роздача луту" }
+    local tabNames = {
+        SR.L.TAB_DASHBOARD or "Панель керування",
+        SR.L.TAB_LEDGER or "Список софтів",
+        SR.L.TAB_BROWSER or "Огляд луту",
+        SR.L.TAB_SESSION or "Здобич рейду",
+    }
 
     local tabW = 116
     local spacing = 4
