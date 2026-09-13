@@ -44,7 +44,12 @@ describe("SR chat command parsing (ChatParser.lua)", function()
 
     it("ignores chat messages that aren't an sr command", function()
         SR:HandleIncoming("just chatting", "Member", false)
+        SR:HandleIncoming("срака", "Member", false)
+        SR:HandleIncoming("срака " .. ITEM_LINK, "Member", false)
+        SR:HandleIncoming("справа", "Member", false)
+        SR:HandleIncoming("срібло", "Member", false)
         assert.are.equal(0, #wow.state.sentChat)
+        assert.are.equal(0, SR:GetUsedSRCount("Member"))
     end)
 
     it("tells whoever asks that no session has started yet (host client only)", function()
