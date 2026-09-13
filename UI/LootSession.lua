@@ -13,16 +13,111 @@ local SR = SoftRoll
 
 function SR:BuildLootSession(parent)
 
+    -- ── Верхній тулбар (Під-вкладки: Здобич у сумках / Розрол) ──
+    local topBar = CreateFrame("Frame", nil, parent)
+    topBar:SetPoint("TOPLEFT", 8, -6)
+    topBar:SetPoint("TOPRIGHT", -8, -6)
+    topBar:SetHeight(28)
+
+    local btnBagLootTab = SR:MakeButton(topBar, "🎒 " .. self.L.BAG_LOOT_TAB, 180, 24)
+    btnBagLootTab:SetPoint("LEFT", 0, 0)
+    btnBagLootTab:SetScript("OnClick", function()
+        SR:SetLootSessionMode("bag")
+    end)
+    self.btnBagLootTab = btnBagLootTab
+
+    local btnActiveRollTab = SR:MakeButton(topBar, "🎯 " .. self.L.BAG_LOOT_ACTIVE_ROLL, 160, 24)
+    btnActiveRollTab:SetPoint("LEFT", btnBagLootTab, "RIGHT", 6, 0)
+    btnActiveRollTab:SetScript("OnClick", function()
+        SR:SetLootSessionMode("roll")
+    end)
+    self.btnActiveRollTab = btnActiveRollTab
+
+    local btnRefreshBags = SR:MakeButton(topBar, "🔄 " .. self.L.BAG_LOOT_REFRESH, 130, 24)
+    btnRefreshBags:SetPoint("RIGHT", 0, 0)
+    btnRefreshBags:SetScript("OnClick", function()
+        SR:RefreshBagLoot()
+    end)
+    self.btnRefreshBags = btnRefreshBags
+
+    local sepNav = parent:CreateTexture(nil, "ARTWORK")
+    sepNav:SetHeight(1)
+    sepNav:SetPoint("TOPLEFT", 8, -34)
+    sepNav:SetPoint("TOPRIGHT", -8, -34)
+    sepNav:SetTexture(1, 1, 1, 0.15)
+
+    -----------------------------------------------------------
+    -- ПАНЕЛЬ 1: ЗДОБИЧ У СУМКАХ (Bag Loot Panel)
+    -----------------------------------------------------------
+    local bagPanel = CreateFrame("Frame", nil, parent)
+    bagPanel:SetPoint("TOPLEFT", 0, -36)
+    bagPanel:SetPoint("BOTTOMRIGHT", 0, 0)
+    self.lootBagPanel = bagPanel
+
+    local bagHdr = CreateFrame("Frame", nil, bagPanel)
+    bagHdr:SetPoint("TOPLEFT", 8, -4)
+    bagHdr:SetPoint("TOPRIGHT", -8, -4)
+    bagHdr:SetHeight(20)
+
+    local function BagCol(text, x, w)
+        local fs = SR:MakeLabel(bagHdr, 10, 0.65, 0.65, 0.45, "LEFT")
+        fs:SetPoint("LEFT", x, 0)
+        fs:SetWidth(w)
+        fs:SetText(text)
+    end
+    BagCol("Предмет",     10, 180)
+    BagCol("К-ть",        195, 35)
+    BagCol("Софт-роли",   235, 85)
+    BagCol("Таймер",      325, 85)
+    BagCol("Дія",         415, 65)
+
+    local sepBag = bagPanel:CreateTexture(nil, "ARTWORK")
+    sepBag:SetHeight(1)
+    sepBag:SetPoint("TOPLEFT", 8, -24)
+    sepBag:SetPoint("TOPRIGHT", -8, -24)
+    sepBag:SetTexture(1, 1, 1, 0.12)
+
+    local bsf = CreateFrame("ScrollFrame", "SRBagLootScroll", bagPanel, "UIPanelScrollFrameTemplate")
+    bsf:SetPoint("TOPLEFT", 6, -26)
+    bsf:SetPoint("BOTTOMRIGHT", -28, 30)
+
+    local bchild = CreateFrame("Frame", nil, bsf)
+    bchild:SetWidth(bsf:GetWidth() > 0 and bsf:GetWidth() or 462)
+    bchild:SetHeight(1)
+    bsf:SetScrollChild(bchild)
+    self.lootBagScroll = bsf
+    self.lootBagChild = bchild
+    self.bagLootRows = {}
+
+    self.bagLootNoResult = SR:MakeLabel(bagPanel, 12, 0.45, 0.45, 0.50, "CENTER")
+    self.bagLootNoResult:SetPoint("CENTER", bsf, "CENTER", 0, 0)
+    self.bagLootNoResult:SetText(self.L.BAG_LOOT_EMPTY)
+    self.bagLootNoResult:Hide()
+
+    self.bagLootSummary = SR:MakeLabel(bagPanel, 11, 0.7, 0.7, 0.7, "LEFT")
+    self.bagLootSummary:SetPoint("BOTTOMLEFT", 10, 8)
+    self.bagLootSummary:SetPoint("BOTTOMRIGHT", -10, 8)
+    self.bagLootSummary:SetText("")
+
+    -----------------------------------------------------------
+    -- ПАНЕЛЬ 2: АКТИВНИЙ РОЗРОЛ (Active Roll Panel)
+    -----------------------------------------------------------
+    local rollPanel = CreateFrame("Frame", nil, parent)
+    rollPanel:SetPoint("TOPLEFT", 0, -36)
+    rollPanel:SetPoint("BOTTOMRIGHT", 0, 0)
+    rollPanel:Hide()
+    self.lootRollPanel = rollPanel
+
     -- ── Інструкція ──
-    local instr = SR:MakeLabel(parent, 10, 0.6, 0.6, 0.6, "LEFT")
-    instr:SetPoint("TOPLEFT", 10, -8)
-    instr:SetPoint("TOPRIGHT", -10, -8)
-    instr:SetText("Shift-клік по предмету (коли поле активне) або перетягніть його сюди.")
+    local instr = SR:MakeLabel(rollPanel, 10, 0.6, 0.6, 0.6, "LEFT")
+    instr:SetPoint("TOPLEFT", 10, -4)
+    instr:SetPoint("TOPRIGHT", -10, -4)
+    instr:SetText("Shift-клік по предмету (коли поле активне) або виберіть його зі списку сумок.")
 
     -- ── Поле введення ──
-    local itemFrame = CreateFrame("Frame", nil, parent)
-    itemFrame:SetPoint("TOPLEFT", 8, -28)
-    itemFrame:SetPoint("TOPRIGHT", -8, -28)
+    local itemFrame = CreateFrame("Frame", nil, rollPanel)
+    itemFrame:SetPoint("TOPLEFT", 8, -22)
+    itemFrame:SetPoint("TOPRIGHT", -8, -22)
     itemFrame:SetHeight(38)
     SR:ApplyPanelStyle(itemFrame, 0.10, 0.10, 0.14, 0.9)
 
@@ -60,19 +155,25 @@ function SR:BuildLootSession(parent)
     iconBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     self.lootIconBtn = iconBtn
 
-    -- Кнопка "Очистити" (якоримо до правого краю)
-    local clearItemBtn = SR:MakeButton(itemFrame, "Очистити", 80, 24)
-    clearItemBtn:SetPoint("RIGHT", -8, 0)
+    -- Кнопка "Очистити"
+    local clearItemBtn = SR:MakeButton(itemFrame, "Очистити", 70, 24)
+    clearItemBtn:SetPoint("RIGHT", -6, 0)
     clearItemBtn:SetScript("OnClick", function()
         SR:ClearLootItem()
     end)
     self.lootClearBtn = clearItemBtn
 
-    local eb = CreateFrame("EditBox", "SRLootEditBox", itemFrame, "InputBoxTemplate")
+    -- Кнопка "⬅ До сумок"
+    local backToBagsBtn = SR:MakeButton(itemFrame, self.L.BAG_LOOT_BACK_TO_BAGS, 85, 24)
+    backToBagsBtn:SetPoint("RIGHT", clearItemBtn, "LEFT", -6, 0)
+    backToBagsBtn:SetScript("OnClick", function()
+        SR:SetLootSessionMode("bag")
+    end)
+    self.lootBackToBagsBtn = backToBagsBtn
 
-    -- Поле введення для shift-кліку (адаптивне)
-    eb:SetPoint("LEFT", iconBtn, "RIGHT", 12, 0)
-    eb:SetPoint("RIGHT", clearItemBtn, "LEFT", -12, 0)
+    local eb = CreateFrame("EditBox", "SRLootEditBox", itemFrame, "InputBoxTemplate")
+    eb:SetPoint("LEFT", iconBtn, "RIGHT", 10, 0)
+    eb:SetPoint("RIGHT", backToBagsBtn, "LEFT", -10, 0)
     eb:SetHeight(22)
     eb:SetFont("Fonts\\FRIZQT__.TTF", 12)
     eb:SetAutoFocus(false)
@@ -105,14 +206,14 @@ function SR:BuildLootSession(parent)
     end
 
     -- ── Відображення поточного предмета ──
-    self.lootItemLabel = SR:MakeLabel(parent, 13, 1, 0.82, 0, "LEFT")
-    self.lootItemLabel:SetPoint("TOPLEFT", 10, -74)
+    self.lootItemLabel = SR:MakeLabel(rollPanel, 13, 1, 0.82, 0, "LEFT")
+    self.lootItemLabel:SetPoint("TOPLEFT", 10, -66)
     self.lootItemLabel:SetText("")
 
     -- ── Заголовки результатів ──
-    local resHdr = CreateFrame("Frame", nil, parent)
-    resHdr:SetPoint("TOPLEFT", 8, -96)
-    resHdr:SetPoint("TOPRIGHT", -8, -96)
+    local resHdr = CreateFrame("Frame", nil, rollPanel)
+    resHdr:SetPoint("TOPLEFT", 8, -88)
+    resHdr:SetPoint("TOPRIGHT", -8, -88)
     resHdr:SetHeight(20)
 
     local function ResCol(text, x, w)
@@ -126,15 +227,15 @@ function SR:BuildLootSession(parent)
     ResCol("Кількість софтів", 235, 100)
     ResCol("Роли",      340, 120)
 
-    local sep2 = parent:CreateTexture(nil, "ARTWORK")
+    local sep2 = rollPanel:CreateTexture(nil, "ARTWORK")
     sep2:SetHeight(1)
-    sep2:SetPoint("TOPLEFT", 8, -116)
-    sep2:SetPoint("TOPRIGHT", -8, -116)
+    sep2:SetPoint("TOPLEFT", 8, -108)
+    sep2:SetPoint("TOPRIGHT", -8, -108)
     sep2:SetTexture(1, 1, 1, 0.15)
 
     -- ── Прокрутка результатів ──
-    local sf = CreateFrame("ScrollFrame", "SRLootScroll", parent, "UIPanelScrollFrameTemplate")
-    sf:SetPoint("TOPLEFT", 6, -118)
+    local sf = CreateFrame("ScrollFrame", "SRLootScroll", rollPanel, "UIPanelScrollFrameTemplate")
+    sf:SetPoint("TOPLEFT", 6, -110)
     sf:SetPoint("BOTTOMRIGHT", -28, 42)
     sf:SetScript("OnSizeChanged", function(self)
         if SR.lootChild then
@@ -151,13 +252,13 @@ function SR:BuildLootSession(parent)
     self.lootRows  = {}
 
     -- ── Повідомлення про відсутність результатів ──
-    self.lootNoResult = SR:MakeLabel(parent, 12, 0.35, 0.35, 0.40, "CENTER")
+    self.lootNoResult = SR:MakeLabel(rollPanel, 12, 0.35, 0.35, 0.40, "CENTER")
     self.lootNoResult:SetPoint("CENTER", sf, "CENTER", 0, 0)
     self.lootNoResult:SetText("Ніхто не засофтив цей предмет")
     self.lootNoResult:Hide()
 
-    local rollToggleBtn = SR:MakeButton(parent, "Почати рол (/rw)", 180, 28)
-    rollToggleBtn:SetPoint("BOTTOMRIGHT", -8, 12)
+    local rollToggleBtn = SR:MakeButton(rollPanel, "Почати рол (/rw)", 180, 28)
+    rollToggleBtn:SetPoint("BOTTOMRIGHT", -8, 10)
     rollToggleBtn:SetScript("OnClick", function()
         if not SR.activeRollItem then
             SR:AnnounceLootRoll()
@@ -168,12 +269,204 @@ function SR:BuildLootSession(parent)
     self.lootRollToggleBtn = rollToggleBtn
 
     -- ── Підсумкова мітка (знизу зліва) ──
-    self.lootSummary = SR:MakeLabel(parent, 11, 0.7, 0.7, 0.7, "LEFT")
-    self.lootSummary:SetPoint("BOTTOMLEFT", 10, 12)
+    self.lootSummary = SR:MakeLabel(rollPanel, 11, 0.7, 0.7, 0.7, "LEFT")
+    self.lootSummary:SetPoint("BOTTOMLEFT", 10, 10)
     self.lootSummary:SetPoint("RIGHT", rollToggleBtn, "LEFT", -10, 0)
     self.lootSummary:SetWordWrap(true)
     self.lootSummary:SetJustifyV("BOTTOM")
     self.lootSummary:SetText("")
+end
+
+
+--------------------------------------------------------------
+-- ФАБРИКА РЯДКІВ ЗДОБИЧІ У СУМКАХ
+--------------------------------------------------------------
+function SR:GetBagLootRow(container, index)
+    self.bagLootRows = self.bagLootRows or {}
+    if self.bagLootRows[index] then return self.bagLootRows[index] end
+
+    local rowH = 26
+    local row = CreateFrame("Button", nil, container)
+    row:SetHeight(rowH)
+    row:SetPoint("TOPLEFT",  0, -(index - 1) * (rowH + 2))
+    row:SetPoint("TOPRIGHT", 0, -(index - 1) * (rowH + 2))
+
+    local bg = row:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    bg:SetVertexColor(0.11, 0.11, 0.17, (index % 2 == 0) and 0.35 or 0)
+    row.bg = bg
+
+    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    hl:SetVertexColor(0.25, 0.35, 0.50, 0.25)
+
+    -- Icon button
+    local iconBtn = CreateFrame("Button", nil, row)
+    iconBtn:SetSize(22, 22)
+    iconBtn:SetPoint("LEFT", 6, 0)
+    local iconTex = iconBtn:CreateTexture(nil, "ARTWORK")
+    iconTex:SetAllPoints()
+    row.iconTex = iconTex
+    row.iconBtn = iconBtn
+
+    iconBtn:SetScript("OnEnter", function(self)
+        if self.link then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(self.link)
+            GameTooltip:Show()
+        end
+    end)
+    iconBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- Item name / link (clickable for chat paste / tooltip / selection)
+    local nameBtn = CreateFrame("Button", nil, row)
+    nameBtn:SetPoint("LEFT", iconBtn, "RIGHT", 6, 0)
+    nameBtn:SetSize(160, 22)
+    local nameFS = SR:MakeLabel(nameBtn, 11, 1, 1, 1, "LEFT")
+    nameFS:SetAllPoints()
+    row.nameFS = nameFS
+    row.nameBtn = nameBtn
+
+    nameBtn:SetScript("OnEnter", function(self)
+        if self.link then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(self.link)
+            GameTooltip:Show()
+        end
+    end)
+    nameBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    nameBtn:SetScript("OnClick", function(self)
+        if IsModifiedClick and IsModifiedClick("CHATLINK") and self.link and ChatEdit_InsertLink then
+            ChatEdit_InsertLink(self.link)
+        elseif self.link then
+            SR:SetLootItem(self.link)
+        end
+    end)
+
+    -- Count
+    row.countFS = SR:MakeLabel(row, 11, 0.85, 0.85, 0.85, "CENTER")
+    row.countFS:SetPoint("LEFT", 195, 0)
+    row.countFS:SetWidth(35)
+
+    -- SR Badge
+    row.srBadge = SR:MakeLabel(row, 11, 0.4, 1, 0.4, "LEFT")
+    row.srBadge:SetPoint("LEFT", 235, 0)
+    row.srBadge:SetWidth(85)
+
+    -- Trade Timer Badge
+    row.timerBadge = SR:MakeLabel(row, 11, 1, 1, 1, "LEFT")
+    row.timerBadge:SetPoint("LEFT", 325, 0)
+    row.timerBadge:SetWidth(85)
+
+    -- Distribute button
+    local rollBtn = SR:MakeButton(row, self.L.BAG_LOOT_DISTRIBUTE_BTN, 58, 20)
+    rollBtn:SetPoint("LEFT", 415, 0)
+    row.rollBtn = rollBtn
+
+    self.bagLootRows[index] = row
+    return row
+end
+
+--------------------------------------------------------------
+-- ОНОВЛЕННЯ СПИСКУ ЗДОБИЧІ У СУМКАХ
+--------------------------------------------------------------
+function SR:RefreshBagLoot()
+    if not self.lootBagChild then return end
+
+    local bagItems = self:ScanBagsForLoot()
+    self.cachedBagItems = bagItems
+
+    local totalItems = #bagItems
+    local srCountTotal = 0
+    local critTimerTotal = 0
+
+    for i, item in ipairs(bagItems) do
+        if item.srCount > 0 then srCountTotal = srCountTotal + 1 end
+        if item.tradeMins and item.tradeMins <= 30 then critTimerTotal = critTimerTotal + 1 end
+
+        local row = self:GetBagLootRow(self.lootBagChild, i)
+        row:Show()
+
+        -- Icon
+        local _, _, _, _, _, _, _, _, _, tex = GetItemInfo(item.itemID)
+        row.iconTex:SetTexture(tex or "Interface\\Icons\\INV_Misc_QuestionMark")
+        row.iconBtn.link = item.itemLink
+
+        -- Link / Name
+        row.nameFS:SetText(item.itemLink or ("Item #" .. item.itemID))
+        row.nameBtn.link = item.itemLink
+
+        -- Count
+        if item.count and item.count > 1 then
+            row.countFS:SetText("x" .. item.count)
+        else
+            row.countFS:SetText("x1")
+        end
+
+        -- SR Badge
+        if item.srCount > 0 then
+            row.srBadge:SetText("|cff44ff44" .. string.format(self.L.BAG_LOOT_SR_BADGE, item.srCount) .. "|r")
+        else
+            row.srBadge:SetText("|cff888888" .. self.L.BAG_LOOT_FREE_BADGE .. "|r")
+        end
+
+        -- Timer Badge
+        if item.tradeMins then
+            if item.tradeMins <= 30 then
+                row.timerBadge:SetText("|cffff4444" .. string.format(self.L.BAG_LOOT_TIMER_CRITICAL, item.tradeText or "") .. "|r")
+            elseif item.tradeMins <= 60 then
+                row.timerBadge:SetText("|cffffff44" .. (item.tradeText or "") .. "|r")
+            else
+                row.timerBadge:SetText("|cff44ff44" .. (item.tradeText or "") .. "|r")
+            end
+        else
+            row.timerBadge:SetText("|cff777777" .. self.L.BAG_LOOT_NO_TIMER .. "|r")
+        end
+
+        -- Button action
+        row.rollBtn:SetScript("OnClick", function()
+            SR:SetLootItem(item.itemLink)
+        end)
+
+        -- Row background
+        if item.tradeMins and item.tradeMins <= 30 then
+            row.bg:SetVertexColor(0.35, 0.08, 0.08, 0.45) -- Alert red tint
+        elseif item.srCount > 0 then
+            row.bg:SetVertexColor(0.12, 0.18, 0.28, (i % 2 == 0) and 0.40 or 0.20)
+        else
+            row.bg:SetVertexColor(0.11, 0.11, 0.17, (i % 2 == 0) and 0.35 or 0)
+        end
+    end
+
+    -- Hide remaining rows
+    for i = totalItems + 1, #(self.bagLootRows or {}) do
+        self.bagLootRows[i]:Hide()
+    end
+
+    self.lootBagChild:SetHeight(math.max(1, totalItems * 28))
+
+    -- Empty state
+    if totalItems == 0 then
+        self.bagLootNoResult:Show()
+    else
+        self.bagLootNoResult:Hide()
+    end
+
+    -- Update tab title with count
+    if self.btnBagLootTab then
+        if critTimerTotal > 0 then
+            self.btnBagLootTab.label:SetText(string.format("🎒 %s (%d) |cffff4444[⚠️ %d]|r", self.L.BAG_LOOT_TAB, totalItems, critTimerTotal))
+        else
+            self.btnBagLootTab.label:SetText(string.format("🎒 %s (%d)", self.L.BAG_LOOT_TAB, totalItems))
+        end
+    end
+
+    -- Update summary
+    if self.bagLootSummary then
+        self.bagLootSummary:SetText(string.format(self.L.BAG_LOOT_SUMMARY, totalItems, srCountTotal, critTimerTotal))
+    end
 end
 
 --------------------------------------------------------------
@@ -219,86 +512,26 @@ local function GetLootRow(container, index)
     return row
 end
 
---------------------------------------------------------------
--- ВСТАНОВИТИ / ОЧИСТИТИ ПРЕДМЕТ ДЛЯ РОЗДАЧІ
---------------------------------------------------------------
-function SR:SetLootItem(input)
-    if not input or input == "" then return end
-
-    -- Спроба отримати валідний лінк на предмет з рядка
-    local link = input:match("(|c%x+|Hitem:.-%|h%[.-%]|h|r)")
-
-    -- Якщо користувач ввів чистий ID, пробуємо знайти предмет
-    if not link then
-        local rawID = input:match("(%d+)")
-        if rawID then
-            local _, l = GetItemInfo(tonumber(rawID))
-            if l then link = l end
-        end
-    end
-
-    if not link then
-        self:Print(self.L.PRINT_ITEM_NOT_FOUND_SHIFT)
-        return
-    end
-
-    local itemID = self:GetItemIDFromLink(link)
-    if not itemID then return end
-
-    -- Якщо змінився предмет, очищуємо активні та попередні роли
-    if self.activeRollItem and self.activeRollItem ~= itemID then
-        self.activeRollItem = nil
-        self.activeRolls = {}
-    end
-    self.lastRollItem = nil
-    self.lastRolls = nil
-
-    -- Кешування предмета
-    self.currentLootItemID   = itemID
-    self.currentLootItemLink = link
-
-    -- Оновлення іконки
-    local _, _, _, _, _, _, _, _, _, tex = GetItemInfo(itemID)
-    if tex then
-        self.lootIconTex:SetTexture(tex)
-    else
-        self.lootIconTex:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-    end
-    self.lootIconBtn.link = link
-
-    -- Оновлення напису
-    self.lootItemLabel:SetText("Поточний предмет:  " .. link)
-
-    -- Оновлення поля введення
-    if self.lootItemEditBox then
-        self.lootItemEditBox:SetText(link)
-        self.lootItemEditBox:ClearFocus()
-    end
-
-    -- Оновлення результатів
-    self:UpdateLootSession()
-end
-
-function SR:ClearLootItem()
-    self.currentLootItemID   = nil
-    self.currentLootItemLink = nil
-    self.activeRollItem      = nil
-    self.activeRolls         = {}
-    self.lastRollItem        = nil
-    self.lastRolls           = nil
-    self.lootIconTex:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
-    self.lootIconBtn.link = nil
-    self.lootItemLabel:SetText("")
-    if self.lootItemEditBox then
-        self.lootItemEditBox:SetText("")
-    end
-    self:UpdateLootSession()
-end
 
 --------------------------------------------------------------
 -- ОНОВЛЕННЯ СЕСІЇ ЗДОБИЧІ
 --------------------------------------------------------------
 function SR:UpdateLootSession()
+    if not self.lootChild then return end
+
+    if not self.lootSessionMode then
+        if self.currentLootItemID then
+            self:SetLootSessionMode("roll")
+        else
+            self:SetLootSessionMode("bag")
+            return
+        end
+    end
+
+    if self.lootSessionMode == "bag" then
+        self:RefreshBagLoot()
+        return
+    end
     if not self.lootChild then return end
     if self.lootScroll and self.lootScroll:GetWidth() > 0 then
         self.lootChild:SetWidth(self.lootScroll:GetWidth())

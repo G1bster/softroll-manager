@@ -121,6 +121,7 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("BAG_UPDATE")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
@@ -133,8 +134,20 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if SR.OnGroupRosterUpdate then
             SR:OnGroupRosterUpdate()
         end
+    elseif event == "BAG_UPDATE" then
+        if SR.OnBagUpdate then
+            SR:OnBagUpdate()
+        end
     end
 end)
+
+function SR:OnBagUpdate()
+    if self.mainFrame and self.mainFrame:IsShown() and self.panels and self.panels[4] and self.panels[4]:IsShown() then
+        if self.lootSessionMode == "bag" and self.RefreshBagLoot then
+            self:RefreshBagLoot()
+        end
+    end
+end
 
 function SR:Initialize()
     -- Перевірка існування таблиці SavedVariables та заповнення відсутніх стандартних значень
@@ -1208,3 +1221,283 @@ function SR:EndLootRoll()
     self.activeRolls = {}
     if self.UpdateLootSession then self:UpdateLootSession() end
 end
+
+--------------------------------------------------------------
+-- КЕРУВАННЯ ПРЕДМЕТОМ РОЗДАЧІ ТА РЕЖИМАМИ СЕСІЇ
+--------------------------------------------------------------
+
+--- Перемикає режим відображення роздачі здобичі ("bag" - сканер сумок, "roll" - активний розрол)
+function SR:SetLootSessionMode(mode)
+    self.lootSessionMode = mode
+    if mode == "bag" then
+        if self.lootBagPanel then self.lootBagPanel:Show() end
+        if self.lootRollPanel then self.lootRollPanel:Hide() end
+        if self.btnBagLootTab and self.btnBagLootTab.bg then
+            self.btnBagLootTab.bg:SetVertexColor(0.18, 0.24, 0.38, 1)
+            self.btnBagLootTab.label:SetTextColor(1, 1, 1)
+        end
+        if self.btnActiveRollTab and self.btnActiveRollTab.bg then
+            self.btnActiveRollTab.bg:SetVertexColor(0.10, 0.10, 0.16, 0.9)
+            self.btnActiveRollTab.label:SetTextColor(0.55, 0.55, 0.60)
+        end
+        if self.RefreshBagLoot then self:RefreshBagLoot() end
+    else
+        if self.lootBagPanel then self.lootBagPanel:Hide() end
+        if self.lootRollPanel then self.lootRollPanel:Show() end
+        if self.btnBagLootTab and self.btnBagLootTab.bg then
+            self.btnBagLootTab.bg:SetVertexColor(0.10, 0.10, 0.16, 0.9)
+            self.btnBagLootTab.label:SetTextColor(0.55, 0.55, 0.60)
+        end
+        if self.btnActiveRollTab and self.btnActiveRollTab.bg then
+            self.btnActiveRollTab.bg:SetVertexColor(0.18, 0.24, 0.38, 1)
+            self.btnActiveRollTab.label:SetTextColor(1, 1, 1)
+        end
+        if self.UpdateLootSession then self:UpdateLootSession() end
+    end
+end
+
+--- Встановлює поточний предмет для розролу
+function SR:SetLootItem(input)
+    if not input or input == "" then return end
+
+    -- Спроба отримати валідний лінк на предмет з рядка
+    local link = input:match("(|c%x+|Hitem:.-%|h%[.-%]|h|r)")
+
+    -- Якщо користувач ввів чистий ID, пробуємо знайти предмет
+    if not link then
+        local rawID = input:match("(%d+)")
+        if rawID and GetItemInfo then
+            local _, l = GetItemInfo(tonumber(rawID))
+            if l then link = l end
+        end
+    end
+
+    if not link then
+        if self.Print and self.L and self.L.PRINT_ITEM_NOT_FOUND_SHIFT then
+            self:Print(self.L.PRINT_ITEM_NOT_FOUND_SHIFT)
+        end
+        return
+    end
+
+    local itemID = self:GetItemIDFromLink(link)
+    if not itemID then return end
+
+    -- Якщо змінився предмет, очищуємо активні та попередні роли
+    if self.activeRollItem and self.activeRollItem ~= itemID then
+        self.activeRollItem = nil
+        self.activeRolls = {}
+    end
+    self.lastRollItem = nil
+    self.lastRolls = nil
+
+    -- Кешування предмета
+    self.currentLootItemID   = itemID
+    self.currentLootItemLink = link
+
+    -- Оновлення UI елементів, якщо вони існують
+    if self.lootIconTex and GetItemInfo then
+        local _, _, _, _, _, _, _, _, _, tex = GetItemInfo(itemID)
+        if tex then
+            self.lootIconTex:SetTexture(tex)
+        else
+            self.lootIconTex:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        end
+    end
+    if self.lootIconBtn then
+        self.lootIconBtn.link = link
+    end
+
+    if self.lootItemLabel then
+        self.lootItemLabel:SetText("Поточний предмет:  " .. link)
+    end
+
+    if self.lootItemEditBox then
+        self.lootItemEditBox:SetText(link)
+        self.lootItemEditBox:ClearFocus()
+    end
+
+    -- Автоматично перемикаємо на активний розрол
+    self:SetLootSessionMode("roll")
+end
+
+--- Очищує поточний предмет розролу
+function SR:ClearLootItem()
+    self.currentLootItemID   = nil
+    self.currentLootItemLink = nil
+    self.activeRollItem      = nil
+    self.activeRolls         = {}
+    self.lastRollItem        = nil
+    self.lastRolls           = nil
+
+    if self.lootIconTex then
+        self.lootIconTex:SetTexture("Interface\\PaperDoll\\UI-Backpack-EmptySlot")
+    end
+    if self.lootIconBtn then
+        self.lootIconBtn.link = nil
+    end
+    if self.lootItemLabel then
+        self.lootItemLabel:SetText("")
+    end
+    if self.lootItemEditBox then
+        self.lootItemEditBox:SetText("")
+    end
+
+    if self.UpdateLootSession then
+        self:UpdateLootSession()
+    end
+end
+
+--------------------------------------------------------------
+-- 16. СКАНЕР СУМОК ТА ТАЙМЕР ПЕРЕДАЧІ
+--------------------------------------------------------------
+
+local scanTip = nil
+local function GetScanTooltip()
+    if not scanTip and CreateFrame then
+        scanTip = CreateFrame("GameTooltip", "SRBagScanTooltip", UIParent, "GameTooltipTemplate")
+        scanTip:SetOwner(WorldFrame, "ANCHOR_NONE")
+    end
+    return scanTip
+end
+
+--- Зчитує залишок 2-годинного таймера передачі предмету в сумці через тултіп.
+-- @return totalMinutes (number|nil), formattedText (string|nil)
+function SR:GetContainerItemTradeTime(bag, slot)
+    local tip = GetScanTooltip()
+    if not tip or not tip.SetBagItem then return nil, nil end
+
+    tip:ClearLines()
+    tip:SetBagItem(bag, slot)
+    local numLines = tip:NumLines() or 0
+
+    for i = 1, numLines do
+        local lineObj = _G["SRBagScanTooltipTextLeft" .. i]
+        if lineObj and lineObj.GetText then
+            local text = lineObj:GetText()
+            if text and text ~= "" then
+                local isTradeLine = false
+                if _G.BIND_TRADE_TIME_REMAINING then
+                    local pat = _G.BIND_TRADE_TIME_REMAINING:gsub("%%s", ".*")
+                    if text:match(pat) then isTradeLine = true end
+                end
+                if not isTradeLine then
+                    local lower = text:lower()
+                    if lower:find("trade this item") or lower:find("передать этот предмет") or lower:find("передати цей предмет") or lower:find("handeln") or lower:find("échanger") then
+                        isTradeLine = true
+                    end
+                end
+
+                if isTradeLine then
+                    local h = text:match("(%d+)%s*[hH]")
+                           or text:match("(%d+)%s*год")
+                           or text:match("(%d+)%s*ч")
+                           or text:match("(%d+)%s*Ч")
+                           or text:match("(%d+)%s*Std")
+
+                    local m = text:match("(%d+)%s*[mM]")
+                           or text:match("(%d+)%s*хв")
+                           or text:match("(%d+)%s*мин")
+                           or text:match("(%d+)%s*Min")
+
+                    local s = text:match("(%d+)%s*[sS]")
+                           or text:match("(%d+)%s*сек")
+                           or text:match("(%d+)%s*Sek")
+
+                    local hours = tonumber(h) or 0
+                    local mins  = tonumber(m) or 0
+                    local secs  = tonumber(s) or 0
+                    local totalMins = hours * 60 + mins
+
+                    local formatted
+                    if hours > 0 then
+                        formatted = string.format("%dг %02dхв", hours, mins)
+                    elseif mins > 0 then
+                        formatted = string.format("%d хв", mins)
+                    else
+                        formatted = "< 1 хв"
+                    end
+                    return totalMins, formatted
+                end
+            end
+        end
+    end
+    return nil, nil
+end
+
+--- Сканує всі 5 сумок (0..4) на наявність рейд-луту та повертає відсортований список.
+function SR:ScanBagsForLoot()
+    if not GetContainerNumSlots then return {} end
+
+    local items = {}
+    local currentInst = self.db and self.db.instance or "ICC"
+
+    for bag = 0, 4 do
+        local numSlots = GetContainerNumSlots(bag) or 0
+        for slot = 1, numSlots do
+            local link = GetContainerItemLink and GetContainerItemLink(bag, slot)
+            if link then
+                local itemID = self:GetItemIDFromLink(link)
+                if itemID then
+                    local count = 1
+                    local quality = 4
+                    if GetContainerItemInfo then
+                        local _, c, _, q = GetContainerItemInfo(bag, slot)
+                        count = c or 1
+                        quality = q or 4
+                    end
+
+                    local tradeMins, tradeText = self:GetContainerItemTradeTime(bag, slot)
+                    local srs = self:GetPlayersWithSR(itemID)
+                    local srCount = srs and #srs or 0
+                    local isRaidItem = (self.IsValidItemForInstance and self:IsValidItemForInstance(itemID, currentInst))
+
+                    -- Включаємо предмет, якщо:
+                    -- 1. На нього є зареєстровані софт-роли, АБО
+                    -- 2. У нього є активний 2-годинний таймер передачі (боп-дроп рейду), АБО
+                    -- 3. Це епічний/легендарний предмет поточного інстансу
+                    local shouldInclude = (srCount > 0)
+                                       or (tradeMins ~= nil)
+                                       or (isRaidItem and quality >= 4)
+
+                    if shouldInclude then
+                        table.insert(items, {
+                            bag       = bag,
+                            slot      = slot,
+                            itemID    = itemID,
+                            itemLink  = link,
+                            count     = count,
+                            quality   = quality,
+                            tradeMins = tradeMins,
+                            tradeText = tradeText,
+                            srCount   = srCount,
+                            reservers = srs,
+                        })
+                    end
+                end
+            end
+        end
+    end
+
+    -- Сортування:
+    -- 1. Предмети з критичним таймером (<= 30 хв) завжди нагорі!
+    -- 2. Предмети з зареєстрованими SR (srCount > 0) перед предметами без софтів
+    -- 3. За залишком часу передачі (найменший залишок спочатку)
+    -- 4. За назвою/ID
+    table.sort(items, function(a, b)
+        local aCrit = (a.tradeMins and a.tradeMins <= 30) and 1 or 0
+        local bCrit = (b.tradeMins and b.tradeMins <= 30) and 1 or 0
+        if aCrit ~= bCrit then return aCrit > bCrit end
+
+        local aHasSR = (a.srCount > 0) and 1 or 0
+        local bHasSR = (b.srCount > 0) and 1 or 0
+        if aHasSR ~= bHasSR then return aHasSR > bHasSR end
+
+        if a.tradeMins and b.tradeMins and a.tradeMins ~= b.tradeMins then
+            return a.tradeMins < b.tradeMins
+        end
+
+        return a.itemID < b.itemID
+    end)
+
+    return items
+end

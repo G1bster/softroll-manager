@@ -23,6 +23,17 @@ function M.reset()
     M.state.sentChat         = {}   -- захоплені виклики SendChatMessage
     M.state.sentAddon        = {}   -- захоплені виклики SendAddonMessage
     M.state.printed          = {}   -- захоплені DEFAULT_CHAT_FRAME:AddMessage
+    M.state.bags             = { [0] = {}, [1] = {}, [2] = {}, [3] = {}, [4] = {} }
+end
+
+--- Додає предмет у слот сумки для тестування сканера сумок.
+function M.addBagItem(bag, slot, itemID, count, tradeText)
+    M.state.bags[bag] = M.state.bags[bag] or {}
+    M.state.bags[bag][slot] = {
+        itemID = itemID,
+        count = count or 1,
+        tradeText = tradeText,
+    }
 end
 
 --- Реєструє гравця в тестовому рейді. rank: 0=учасник, 1=помічник, 2=лідер.
@@ -44,8 +55,10 @@ function M.addItem(itemID, name, link, quality)
 end
 
 function M.install()
-    _G.CreateFrame = function(_frameType, _name, _parent, _template)
+    _G.CreateFrame = function(_frameType, name, _parent, _template)
         local frame = {}
+        frame._name = name
+        frame._lines = {}
         function frame:RegisterEvent() end
         function frame:UnregisterEvent() end
         function frame:SetScript(event, fn) frame["_script_" .. event] = fn end
@@ -53,8 +66,32 @@ function M.install()
         function frame:Hide() end
         function frame:Show() end
         function frame:SetOwner() end
-        function frame:ClearLines() end
+        function frame:ClearLines()
+            frame._lines = {}
+        end
+        function frame:NumLines()
+            return #frame._lines
+        end
         function frame:SetHyperlink() end
+        function frame:SetBagItem(bag, slot)
+            frame._lines = {}
+            local item = M.state.bags[bag] and M.state.bags[bag][slot]
+            if item then
+                local it = M.state.items[item.itemID]
+                local itemName = it and it.name or ("Item " .. item.itemID)
+                table.insert(frame._lines, itemName)
+                if item.tradeText then
+                    local tradeLine = "You may trade this item with players that were also eligible to loot this item for " .. item.tradeText .. "."
+                    table.insert(frame._lines, tradeLine)
+                end
+            end
+            for i, line in ipairs(frame._lines) do
+                local lineName = (name or "SRBagScanTooltip") .. "TextLeft" .. i
+                _G[lineName] = {
+                    GetText = function() return line end,
+                }
+            end
+        end
         return frame
     end
 
@@ -108,6 +145,33 @@ function M.install()
         if not it then return nil end
         return it.name, it.link, it.quality
     end
+
+    _G.GetContainerNumSlots = function(bag)
+        local b = M.state.bags[bag]
+        if not b then return 0 end
+        local maxSlot = 0
+        for slot in pairs(b) do
+            if slot > maxSlot then maxSlot = slot end
+        end
+        return maxSlot
+    end
+
+    _G.GetContainerItemLink = function(bag, slot)
+        local it = M.state.bags[bag] and M.state.bags[bag][slot]
+        if not it then return nil end
+        local itemInfo = M.state.items[it.itemID]
+        return itemInfo and itemInfo.link or nil
+    end
+
+    _G.GetContainerItemInfo = function(bag, slot)
+        local it = M.state.bags[bag] and M.state.bags[bag][slot]
+        if not it then return nil end
+        local itemInfo = M.state.items[it.itemID]
+        local quality = itemInfo and itemInfo.quality or 4
+        return "Interface\\Icons\\INV_Misc_QuestionMark", it.count or 1, false, quality
+    end
+
+    _G.BIND_TRADE_TIME_REMAINING = "You may trade this item with players that were also eligible to loot this item for %s."
 
     _G.SendChatMessage = function(msg, chatType, _lang, target)
         table.insert(M.state.sentChat, { msg = msg, chatType = chatType, target = target })

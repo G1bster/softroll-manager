@@ -1,0 +1,168 @@
+local load_addon = require("spec.support.load_addon")
+
+local ITEM_LINK_BELT = "|cffa335ee|Hitem:49978:0:0:0:0:0:0:0|h[Crushing Coldwraith Belt]|h|r"
+local ITEM_LINK_BOOTS = "|cffa335ee|Hitem:49983:0:0:0:0:0:0:0|h[Necrophotic Boots]|h|r"
+local ITEM_LINK_POTION = "|cffffffff|Hitem:33447:0:0:0:0:0:0:0|h[Runic Healing Potion]|h|r"
+
+describe("Bag Loot Scanner & 2-Hour Trade Timer Tracker (Core.lua & UI/LootSession.lua)", function()
+    local SR, wow
+
+    before_each(function()
+        SR, wow = load_addon.load()
+        wow.state.playerName = "Leader"
+        wow.addItem(49978, "Crushing Coldwraith Belt", ITEM_LINK_BELT, 4)
+        wow.addItem(49983, "Necrophotic Boots", ITEM_LINK_BOOTS, 4)
+        wow.addItem(33447, "Runic Healing Potion", ITEM_LINK_POTION, 1)
+
+        wow.addRaidMember("Leader", 2)
+        wow.addRaidMember("Member", 0)
+        SR.sessionActive = true
+        SR.sessionHost = "Leader"
+        SR.locked = false
+    end)
+
+    describe("GetContainerItemTradeTime", function()
+        it("returns nil when item has no trade timer", function()
+            wow.addBagItem(0, 1, 49978, 1, nil)
+            local mins, text = SR:GetContainerItemTradeTime(0, 1)
+            assert.is_nil(mins)
+            assert.is_nil(text)
+        end)
+
+        it("parses hours and minutes (e.g. 1h 45m)", function()
+            wow.addBagItem(0, 1, 49978, 1, "1h 45m")
+            local mins, text = SR:GetContainerItemTradeTime(0, 1)
+            assert.are.equal(105, mins)
+            assert.are.equal("1г 45хв", text)
+        end)
+
+        it("parses minutes only (e.g. 24m)", function()
+            wow.addBagItem(0, 1, 49978, 1, "24m")
+            local mins, text = SR:GetContainerItemTradeTime(0, 1)
+            assert.are.equal(24, mins)
+            assert.are.equal("24 хв", text)
+        end)
+
+        it("parses seconds only as < 1 min", function()
+            wow.addBagItem(0, 1, 49978, 1, "45s")
+            local mins, text = SR:GetContainerItemTradeTime(0, 1)
+            assert.are.equal(0, mins)
+            assert.are.equal("< 1 хв", text)
+        end)
+
+        it("parses Cyrillic / Ukrainian and Russian timer strings", function()
+            wow.addBagItem(0, 1, 49978, 1, "1ч 35мин")
+            local mins1, text1 = SR:GetContainerItemTradeTime(0, 1)
+            assert.are.equal(95, mins1)
+            assert.are.equal("1г 35хв", text1)
+
+            wow.addBagItem(0, 2, 49983, 1, "40 хв")
+            local mins2, text2 = SR:GetContainerItemTradeTime(0, 2)
+            assert.are.equal(40, mins2)
+            assert.are.equal("40 хв", text2)
+        end)
+    end)
+
+    describe("ScanBagsForLoot", function()
+        it("returns empty list when bags have no raid or SR items", function()
+            wow.addBagItem(0, 1, 33447, 5, nil) -- Healing potion
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(0, #loot)
+        end)
+
+        it("scans across multiple bags (0 through 4) and ignores empty slots", function()
+            wow.addBagItem(0, 1, 33447, 1, nil) -- ignored
+            wow.addBagItem(1, 4, 49978, 1, "1h 10m")
+            wow.addBagItem(4, 2, 49983, 2, "25m")
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(2, #loot)
+            -- Critical timer item in bag 4 comes first
+            assert.are.equal(4, loot[1].bag)
+            assert.are.equal(2, loot[1].slot)
+            assert.are.equal(25, loot[1].tradeMins)
+            assert.are.equal(2, loot[1].count)
+
+            -- Bag 1 item comes second
+            assert.are.equal(1, loot[2].bag)
+            assert.are.equal(4, loot[2].slot)
+            assert.are.equal(70, loot[2].tradeMins)
+        end)
+
+        it("includes items that have soft-reserves registered", function()
+            wow.addBagItem(0, 1, 49978, 1, nil)
+            SR:AddSR("Member", ITEM_LINK_BELT, 1)
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(1, #loot)
+            assert.are.equal(49978, loot[1].itemID)
+            assert.are.equal(1, loot[1].srCount)
+            assert.are.equal("Member", loot[1].reservers[1].name)
+        end)
+
+        it("includes items that have an active trade timer even without soft-reserves", function()
+            wow.addBagItem(0, 1, 49983, 1, "1h 59m")
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(1, #loot)
+            assert.are.equal(49983, loot[1].itemID)
+            assert.are.equal(0, loot[1].srCount)
+            assert.are.equal(119, loot[1].tradeMins)
+        end)
+
+        it("sorts critical trade timers (<= 30 min) first, then SR items, then free items", function()
+            -- Item 1: Boots with 15m remaining (critical!)
+            wow.addBagItem(0, 1, 49983, 1, "15m")
+
+            -- Item 2: Belt with 1h 45m and 1 SR
+            wow.addBagItem(0, 2, 49978, 1, "1h 45m")
+            SR:AddSR("Member", ITEM_LINK_BELT, 1)
+
+            local loot = SR:ScanBagsForLoot()
+            assert.are.equal(2, #loot)
+            -- Critical timer boots should be first!
+            assert.are.equal(49983, loot[1].itemID)
+            assert.are.equal(15, loot[1].tradeMins)
+            -- Belt should be second
+            assert.are.equal(49978, loot[2].itemID)
+            assert.are.equal(1, loot[2].srCount)
+        end)
+    end)
+
+    describe("SetLootSessionMode and SetLootItem", function()
+        it("switches modes cleanly", function()
+            SR:SetLootSessionMode("bag")
+            assert.are.equal("bag", SR.lootSessionMode)
+
+            SR:SetLootSessionMode("roll")
+            assert.are.equal("roll", SR.lootSessionMode)
+        end)
+
+        it("automatically switches to 'roll' mode when SetLootItem is called", function()
+            SR:SetLootSessionMode("bag")
+            assert.are.equal("bag", SR.lootSessionMode)
+
+            SR:SetLootItem(ITEM_LINK_BELT)
+            assert.are.equal("roll", SR.lootSessionMode)
+            assert.are.equal(49978, SR.currentLootItemID)
+        end)
+
+        it("accepts plain item ID string and resolves link", function()
+            SR:SetLootItem("49978")
+            assert.are.equal("roll", SR.lootSessionMode)
+            assert.are.equal(49978, SR.currentLootItemID)
+            assert.are.equal(ITEM_LINK_BELT, SR.currentLootItemLink)
+        end)
+
+        it("ClearLootItem cleans up active and current item fields", function()
+            SR:SetLootItem(ITEM_LINK_BELT)
+            assert.are.equal(49978, SR.currentLootItemID)
+
+            SR:ClearLootItem()
+            assert.is_nil(SR.currentLootItemID)
+            assert.is_nil(SR.currentLootItemLink)
+            assert.is_nil(SR.activeRollItem)
+            assert.are.equal(0, #SR.activeRolls)
+        end)
+    end)
+end)

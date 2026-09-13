@@ -154,3 +154,21 @@ L.POPUP_CONFIRM_CLEAR_ALL       = "Ви впевнені, що хочете оч
 L.POPUP_CONFIRM_CLEAR_PLAYER    = "Очистити всі софт-роли для %s?"
 L.POPUP_CONFIRM_REMOVE_ITEM     = "Видалити %s для %s?"
 L.POPUP_CONFIRM_ADD_ITEM        = "Додати %s для %s?"
+
+--------------------------------------------------------------
+-- 6. СКАНЕР СУМОК ТА ТАЙМЕР ПЕРЕДАЧІ (BAG LOOT & TRADE TIMER)
+--------------------------------------------------------------
+L.BAG_LOOT_TAB                  = "Здобич у сумках"
+L.BAG_LOOT_TAB_WITH_COUNT       = "Здобич у сумках (%d)"
+L.BAG_LOOT_ACTIVE_ROLL          = "Активний розрол"
+L.BAG_LOOT_BACK_TO_BAGS         = "⬅ До сумок"
+L.BAG_LOOT_REFRESH              = "Оновити сумки"
+L.BAG_LOOT_EMPTY                = "У ваших сумках не знайдено здобичі рейду або софт-ролів."
+L.BAG_LOOT_SR_BADGE             = "%d SR"
+L.BAG_LOOT_FREE_BADGE           = "Вільний (0 SR)"
+L.BAG_LOOT_DISTRIBUTE_BTN       = "Роздати"
+L.BAG_LOOT_TIMER_EXPIRED        = "Час сплив"
+L.BAG_LOOT_TIMER_CRITICAL       = "%s ⚠️"
+L.BAG_LOOT_NO_TIMER             = "Без таймера"
+L.BAG_LOOT_SUMMARY              = "Предметів у сумках: %d | З софтами: %d | Спливає час (<30хв): %d"
+
