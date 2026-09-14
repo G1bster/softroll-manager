@@ -1261,11 +1261,15 @@ function SR:SetLootSessionMode(mode)
         if self.lootRollPanel then self.lootRollPanel:Hide() end
         if self.btnBagLootTab and self.btnBagLootTab.bg then
             self.btnBagLootTab.bg:SetVertexColor(0.18, 0.24, 0.38, 1)
-            self.btnBagLootTab.label:SetTextColor(1, 1, 1)
+            if self.btnBagLootTab.label then
+                self.btnBagLootTab.label:SetTextColor(1, 1, 1)
+            end
         end
         if self.btnActiveRollTab and self.btnActiveRollTab.bg then
             self.btnActiveRollTab.bg:SetVertexColor(0.10, 0.10, 0.16, 0.9)
-            self.btnActiveRollTab.label:SetTextColor(0.55, 0.55, 0.60)
+            if self.btnActiveRollTab.label then
+                self.btnActiveRollTab.label:SetTextColor(0.55, 0.55, 0.60)
+            end
         end
         if self.RefreshBagLoot then self:RefreshBagLoot() end
     else
@@ -1273,11 +1277,15 @@ function SR:SetLootSessionMode(mode)
         if self.lootRollPanel then self.lootRollPanel:Show() end
         if self.btnBagLootTab and self.btnBagLootTab.bg then
             self.btnBagLootTab.bg:SetVertexColor(0.10, 0.10, 0.16, 0.9)
-            self.btnBagLootTab.label:SetTextColor(0.55, 0.55, 0.60)
+            if self.btnBagLootTab.label then
+                self.btnBagLootTab.label:SetTextColor(0.55, 0.55, 0.60)
+            end
         end
         if self.btnActiveRollTab and self.btnActiveRollTab.bg then
             self.btnActiveRollTab.bg:SetVertexColor(0.18, 0.24, 0.38, 1)
-            self.btnActiveRollTab.label:SetTextColor(1, 1, 1)
+            if self.btnActiveRollTab.label then
+                self.btnActiveRollTab.label:SetTextColor(1, 1, 1)
+            end
         end
         if self.UpdateLootSession then self:UpdateLootSession() end
     end

@@ -461,10 +461,13 @@ function SR:RefreshBagLoot()
 
     -- Update tab title with count
     if self.btnBagLootTab then
-        if critTimerTotal > 0 then
-            self.btnBagLootTab.label:SetText(string.format("%s (%d) |cffff4444[! %d]|r", self.L.BAG_LOOT_TAB, totalItems, critTimerTotal))
-        else
-            self.btnBagLootTab.label:SetText(string.format("%s (%d)", self.L.BAG_LOOT_TAB, totalItems))
+        local tabText = (critTimerTotal > 0)
+            and string.format("%s (%d) |cffff4444[! %d]|r", self.L.BAG_LOOT_TAB, totalItems, critTimerTotal)
+            or string.format("%s (%d)", self.L.BAG_LOOT_TAB, totalItems)
+        if self.btnBagLootTab.label and self.btnBagLootTab.label.SetText then
+            self.btnBagLootTab.label:SetText(tabText)
+        elseif self.btnBagLootTab.SetText then
+            self.btnBagLootTab:SetText(tabText)
         end
     end
 
