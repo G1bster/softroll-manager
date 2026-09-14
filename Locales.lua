@@ -168,7 +168,7 @@ L.BAG_LOOT_SR_BADGE             = "%d SR"
 L.BAG_LOOT_FREE_BADGE           = "Вільний (0 SR)"
 L.BAG_LOOT_DISTRIBUTE_BTN       = "Роздати"
 L.BAG_LOOT_TIMER_EXPIRED        = "Час сплив"
-L.BAG_LOOT_TIMER_CRITICAL       = "%s ⚠️"
+L.BAG_LOOT_TIMER_CRITICAL       = "%s (!)"
 L.BAG_LOOT_NO_TIMER             = "Без таймера"
 L.BAG_LOOT_SUMMARY              = "Предметів у сумках: %d | З софтами: %d | Спливає час (<30хв): %d"
 

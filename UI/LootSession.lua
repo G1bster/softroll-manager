@@ -19,21 +19,23 @@ function SR:BuildLootSession(parent)
     topBar:SetPoint("TOPRIGHT", -8, -6)
     topBar:SetHeight(28)
 
-    local btnBagLootTab = SR:MakeButton(topBar, "🎒 " .. self.L.BAG_LOOT_TAB, 180, 24)
+    local btnBagLootTab = SR:MakeFlatTab(topBar, self.L.BAG_LOOT_TAB, 24)
+    btnBagLootTab:SetWidth(180)
     btnBagLootTab:SetPoint("LEFT", 0, 0)
     btnBagLootTab:SetScript("OnClick", function()
         SR:SetLootSessionMode("bag")
     end)
     self.btnBagLootTab = btnBagLootTab
 
-    local btnActiveRollTab = SR:MakeButton(topBar, "🎯 " .. self.L.BAG_LOOT_ACTIVE_ROLL, 160, 24)
+    local btnActiveRollTab = SR:MakeFlatTab(topBar, self.L.BAG_LOOT_ACTIVE_ROLL, 24)
+    btnActiveRollTab:SetWidth(160)
     btnActiveRollTab:SetPoint("LEFT", btnBagLootTab, "RIGHT", 6, 0)
     btnActiveRollTab:SetScript("OnClick", function()
         SR:SetLootSessionMode("roll")
     end)
     self.btnActiveRollTab = btnActiveRollTab
 
-    local btnRefreshBags = SR:MakeButton(topBar, "🔄 " .. self.L.BAG_LOOT_REFRESH, 130, 24)
+    local btnRefreshBags = SR:MakeButton(topBar, self.L.BAG_LOOT_REFRESH, 130, 24)
     btnRefreshBags:SetPoint("RIGHT", 0, 0)
     btnRefreshBags:SetScript("OnClick", function()
         SR:RefreshBagLoot()
@@ -460,9 +462,9 @@ function SR:RefreshBagLoot()
     -- Update tab title with count
     if self.btnBagLootTab then
         if critTimerTotal > 0 then
-            self.btnBagLootTab.label:SetText(string.format("🎒 %s (%d) |cffff4444[⚠️ %d]|r", self.L.BAG_LOOT_TAB, totalItems, critTimerTotal))
+            self.btnBagLootTab.label:SetText(string.format("%s (%d) |cffff4444[! %d]|r", self.L.BAG_LOOT_TAB, totalItems, critTimerTotal))
         else
-            self.btnBagLootTab.label:SetText(string.format("🎒 %s (%d)", self.L.BAG_LOOT_TAB, totalItems))
+            self.btnBagLootTab.label:SetText(string.format("%s (%d)", self.L.BAG_LOOT_TAB, totalItems))
         end
     end
 
