@@ -951,7 +951,7 @@ function SR:ShowExportWindow(formatType)
                         local countStr = res.count > 1 and (" x" .. res.count) or ""
                         table.insert(parts, res.name .. countStr)
                     end
-                    text = text .. "* [" .. item.itemName .. "](<https://www.wowhead.com/wotlk/item=" .. item.itemID .. ">) (" .. item.count .. "): " .. table.concat(parts, ", ") .. "\n"
+                    text = text .. "* " .. item.itemName .. " (" .. item.count .. "): " .. table.concat(parts, ", ") .. "\n"
                 end
                 text = text .. "\n"
             end
