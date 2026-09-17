@@ -131,7 +131,7 @@ function SR:BuildLootBrowser(parent)
     -- ── Права панель: Список предметів ──
     local itemPanel = CreateFrame("Frame", nil, parent)
     itemPanel:SetPoint("TOPLEFT", 6, -68)
-    itemPanel:SetPoint("BOTTOMRIGHT", -6, 38)
+    itemPanel:SetPoint("BOTTOMRIGHT", -6, 70)
     SR:ApplyPanelStyle(itemPanel, 0.06, 0.06, 0.10, 0.95)
 
     local itemScroll = CreateFrame("ScrollFrame", "SRItemScroll", itemPanel, "UIPanelScrollFrameTemplate")
@@ -151,40 +151,20 @@ function SR:BuildLootBrowser(parent)
     self.lbItemChild = itemChild
     self.lbItemRows  = {}
 
-    self.lbReserveBtns = {}
-    for i = 0, 4 do
-        local text = (i == 0) and "|cffff4444Видалити софт|r" or ("x" .. i)
-        local btnWidth = (i == 0) and 110 or 32
-        local btn = SR:MakeButton(parent, text, btnWidth, 28)
-        
-        -- Позиціонування буде динамічним через LayoutReserveButtons
-        
-        btn:SetScript("OnClick", function()
-            if not SR.lbSelectedItemID then
-                SR:Print(SR.L.PRINT_SELECT_ITEM_FIRST)
-                return
-            end
-            
-            local target = SR.lbTargetPlayer or SR:GetLocalPlayerName()
-            
-            if i == 0 then
-                -- Логіка видалення
-                if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
-                    SR:RemoveSR(target, SR.lbSelectedItemID)
-                    SR:Print(format(SR.L.PRINT_ITEM_REMOVED_FROM, target))
-                else
-                    SR:SendAddonMsg("R|" .. target .. "|" .. SR.lbSelectedItemID, "WHISPER", SR.sessionHost)
-                    SR:Print(SR.L.PRINT_REMOVE_REQUEST_SENT)
-                end
-            else
-                -- Логіка додавання (isSet = true, тобто встановлюємо точну кількість)
-                SR:RequestSRFromUI(SR.lbSelectedItemID, i, target, true)
-            end
-        end)
-        self.lbReserveBtns[i] = btn
-    end
+    -- ── Ряд "Кому" (лише для РЛ/ко-хоста — показ/приховування керує
+    -- SR:UpdateAdminReadOnly у UI/Shell.lua) ──
+    local targetLabel = SR:MakeLabel(parent, 11, 0.85, 0.85, 0.55)
+    targetLabel:SetPoint("BOTTOMLEFT", 10, 42)
+    targetLabel:SetText(SR.L.UI_TARGET_LABEL)
+    self.lbTargetLabel = targetLabel
 
-    local wishlistBtn = SR:MakeButton(parent, "В обране", 160, 28)
+    local targetDD = CreateFrame("Frame", "SRLootTargetDD", parent, "UIDropDownMenuTemplate")
+    targetDD:SetPoint("LEFT", targetLabel, "RIGHT", -8, -2)
+    UIDropDownMenu_SetWidth(targetDD, 110)
+    self.lbTargetDD = targetDD
+
+    -- ── Нижній ряд дій: [В обране] .......... [-][N][+] [Засофтити xN] ──
+    local wishlistBtn = SR:MakeButton(parent, "В обране", 140, 28)
     wishlistBtn:SetPoint("BOTTOMLEFT", 8, 8)
     wishlistBtn:SetScript("OnClick", function()
         if not SR.lbSelectedItemID then return end
@@ -195,6 +175,46 @@ function SR:BuildLootBrowser(parent)
         end
     end)
     self.lbWishlistBtn = wishlistBtn
+
+    local reserveBtn = SR:MakeButton(parent, format(SR.L.UI_RESERVE_BTN, 1), 150, 28)
+    reserveBtn:SetPoint("BOTTOMRIGHT", -8, 8)
+    reserveBtn:SetScript("OnClick", function()
+        if not SR.lbSelectedItemID then
+            SR:Print(SR.L.PRINT_SELECT_ITEM_FIRST)
+            return
+        end
+        local target = SR.lbTargetPlayer or SR:GetLocalPlayerName()
+        SR:RequestSRFromUI(SR.lbSelectedItemID, SR.lbReserveCount or 1, target, true)
+    end)
+    self.lbReserveBtn = reserveBtn
+
+    local incBtn = SR:MakeButton(parent, "+", 24, 28)
+    incBtn:SetPoint("RIGHT", reserveBtn, "LEFT", -6, 0)
+    incBtn:SetScript("OnClick", function()
+        SR.lbReserveCount = (SR.lbReserveCount or 1) + 1
+        SR:LayoutReserveButtons()
+    end)
+    self.lbIncBtn = incBtn
+
+    local countBox = CreateFrame("Frame", nil, parent)
+    countBox:SetSize(28, 28)
+    countBox:SetPoint("RIGHT", incBtn, "LEFT", -2, 0)
+    SR:ApplyPanelStyle(countBox, 0.06, 0.06, 0.10, 0.9)
+    local countFS = countBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    countFS:SetPoint("CENTER")
+    countFS:SetFont("Fonts\\FRIZQT__.TTF", 12)
+    countFS:SetText("1")
+    self.lbCountFS = countFS
+
+    local decBtn = SR:MakeButton(parent, "-", 24, 28)
+    decBtn:SetPoint("RIGHT", countBox, "LEFT", -2, 0)
+    decBtn:SetScript("OnClick", function()
+        if (SR.lbReserveCount or 1) > 1 then
+            SR.lbReserveCount = SR.lbReserveCount - 1
+            SR:LayoutReserveButtons()
+        end
+    end)
+    self.lbDecBtn = decBtn
 
     -- Початковий стан
     if not self.db.lootDifficulty then self.db.lootDifficulty = "25H" end
@@ -231,6 +251,36 @@ local function GetLBItemRow(container, index)
     row.icon:SetSize(28, 28)
     row.icon:SetPoint("LEFT", 4, 0)
     row.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+
+    -- Хрестик видалення — з'являється лише якщо поточна ціль (self.lbTargetPlayer
+    -- або сам гравець) вже зарезервувала показаний в рядку предмет.
+    local removeBtn = CreateFrame("Button", nil, row)
+    removeBtn:SetSize(14, 14)
+    removeBtn:SetPoint("TOPRIGHT", row.icon, "TOPRIGHT", 3, 3)
+    removeBtn:SetNormalTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
+    removeBtn:SetHighlightTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Highlight")
+    removeBtn:SetPushedTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Down")
+    removeBtn:Hide()
+    removeBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(SR.L.UI_REMOVE_ITEM_TOOLTIP)
+        GameTooltip:Show()
+    end)
+    removeBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    removeBtn:SetScript("OnClick", function(self)
+        local r = self:GetParent()
+        if not r.itemID then return end
+        local target = SR.lbTargetPlayer or SR:GetLocalPlayerName()
+        if SR:IsSessionHost() or (SR:IsSessionLeader() and not SR.sessionActive) then
+            SR:RemoveSR(target, r.itemID)
+            SR:Print(format(SR.L.PRINT_ITEM_REMOVED_FROM, target))
+        else
+            SR:SendAddonMsg("R|" .. target .. "|" .. r.itemID, "WHISPER", SR.sessionHost)
+            SR:Print(SR.L.PRINT_REMOVE_REQUEST_SENT)
+        end
+        SR:UpdateLootBrowserItems()
+    end)
+    row.removeBtn = removeBtn
 
     -- Назва предмета
     row.nameFS = SR:MakeLabel(row, 11, 1, 0.82, 0, "LEFT")
@@ -412,15 +462,17 @@ function SR:UpdateLootBrowser()
     self:UpdateLootBrowserItems()
 end
 
+--- Перераховує степер кількості + кнопку "Засофтити xN" для поточного
+-- вибраного предмета й гравця-цілі (self.lbTargetPlayer, або сам гравець).
+-- Викликається при зміні вибраного предмета, цілі, або після (де)реєстрації SR.
 function SR:LayoutReserveButtons()
-    if not self.lbReserveBtns then return end
+    if not self.lbReserveBtn then return end
     local myName = self:GetLocalPlayerName()
     local targetName = self.lbTargetPlayer or myName
-    
+
     local myLimit = self:GetSRLimit(targetName) or 3
     local used = self:GetUsedSRCount(targetName)
-    local remaining = myLimit - used
-    
+
     local itemID = self.lbSelectedItemID
     local currentItemCount = 0
     if itemID and self.db.reserves[targetName] then
@@ -432,51 +484,42 @@ function SR:LayoutReserveButtons()
             end
         end
     end
-    
-    local maxAllowed = remaining + currentItemCount
+
+    local maxAllowed = math.max(0, (myLimit - used) + currentItemCount)
     local canEditTarget = self:CanEditPlayerSR(targetName)
-    
-    local visibleBtns = {}
-    for i = 0, 4 do
-        if i == 0 or i <= myLimit then
-            self.lbReserveBtns[i]:Show()
-            table.insert(visibleBtns, self.lbReserveBtns[i])
-            
-            if not canEditTarget then
-                self.lbReserveBtns[i]:Disable()
-                if i == 0 then
-                    self.lbReserveBtns[i]:SetText("|cff666666Видалити софт|r")
-                end
-            elseif i == 0 then
-                if currentItemCount > 0 then
-                    self.lbReserveBtns[i]:Enable()
-                    self.lbReserveBtns[i]:SetText("|cffff4444Видалити софт|r")
-                else
-                    self.lbReserveBtns[i]:Disable()
-                    self.lbReserveBtns[i]:SetText("|cff666666Видалити софт|r")
-                end
-            else
-                if not itemID or i > maxAllowed then
-                    self.lbReserveBtns[i]:Disable()
-                else
-                    self.lbReserveBtns[i]:Enable()
-                end
-            end
-        else
-            self.lbReserveBtns[i]:Hide()
-        end
+
+    -- Скидаємо степер лише коли реально змінився предмет або ціль —
+    -- інакше випадкове оновлення UI (наприклад, чиясь інша дія в рейді)
+    -- збивало б кількість, яку гравець щойно почав вибирати.
+    local selectionKey = tostring(itemID) .. "|" .. targetName
+    if self._lbLastSelectionKey ~= selectionKey then
+        self._lbLastSelectionKey = selectionKey
+        self.lbReserveCount = (currentItemCount > 0) and currentItemCount or 1
     end
-    
-    -- Позиціонуємо справа наліво
-    for i = #visibleBtns, 1, -1 do
-        local btn = visibleBtns[i]
-        btn:ClearAllPoints()
-        if i == #visibleBtns then
-            btn:SetPoint("BOTTOMRIGHT", -8, 8)
-        else
-            -- прив'язуємо до кнопки, що знаходиться правіше (i+1)
-            btn:SetPoint("RIGHT", visibleBtns[i+1], "LEFT", -4, 0)
-        end
+    self.lbReserveCount = self.lbReserveCount or 1
+    if maxAllowed > 0 then
+        if self.lbReserveCount < 1 then self.lbReserveCount = 1 end
+        if self.lbReserveCount > maxAllowed then self.lbReserveCount = maxAllowed end
+    end
+
+    self.lbCountFS:SetText(self.lbReserveCount)
+    self.lbReserveBtn:SetText(format(SR.L.UI_RESERVE_BTN, self.lbReserveCount))
+
+    local canAct = canEditTarget and itemID ~= nil and maxAllowed > 0
+    if canAct then
+        self.lbReserveBtn:Enable()
+    else
+        self.lbReserveBtn:Disable()
+    end
+    if canAct and self.lbReserveCount > 1 then
+        self.lbDecBtn:Enable()
+    else
+        self.lbDecBtn:Disable()
+    end
+    if canAct and self.lbReserveCount < maxAllowed then
+        self.lbIncBtn:Enable()
+    else
+        self.lbIncBtn:Disable()
     end
 end
 
@@ -510,10 +553,27 @@ function SR:UpdateLootBrowserItems()
 
     self:QueueItemCacheList(items)
 
+    local targetName = self.lbTargetPlayer or self:GetLocalPlayerName()
+    local targetReserves = self.db.reserves[targetName]
+    local canRemoveForTarget = self:CanEditPlayerSR(targetName)
+
     for i, itemID in ipairs(items) do
         local row = GetLBItemRow(self.lbItemChild, i)
         row:Show()
         row.itemID = itemID
+
+        local reservedByTarget = false
+        if targetReserves then
+            local eq = self.GetEquivalentItemIDs and self:GetEquivalentItemIDs(itemID) or { [itemID] = true }
+            for _, e in ipairs(targetReserves) do
+                if eq[e.itemID] then reservedByTarget = true; break end
+            end
+        end
+        if reservedByTarget and canRemoveForTarget then
+            row.removeBtn:Show()
+        else
+            row.removeBtn:Hide()
+        end
 
         local name, link, quality, _, _, _, _, _, _, tex = GetItemInfo(itemID)
         if name then
@@ -559,10 +619,10 @@ function SR:UpdateLootBrowserItems()
     if self.lbWishlistBtn then
         if self.lbSelectedItemID and self:IsInWishlist(self.lbSelectedItemID) then
             self.lbWishlistBtn:SetText("Видалити з обраного")
-            self.lbWishlistBtn:SetWidth(160)
+            self.lbWishlistBtn:SetWidth(140)
         else
             self.lbWishlistBtn:SetText("В обране")
-            self.lbWishlistBtn:SetWidth(160)
+            self.lbWishlistBtn:SetWidth(140)
         end
     end
 
@@ -590,10 +650,10 @@ function SR:HighlightLBItem(itemID)
     if self.lbWishlistBtn then
         if self.lbSelectedItemID and self:IsInWishlist(self.lbSelectedItemID) then
             self.lbWishlistBtn:SetText("Видалити з обраного")
-            self.lbWishlistBtn:SetWidth(160)
+            self.lbWishlistBtn:SetWidth(140)
         else
             self.lbWishlistBtn:SetText("В обране")
-            self.lbWishlistBtn:SetWidth(160)
+            self.lbWishlistBtn:SetWidth(140)
         end
     end
 

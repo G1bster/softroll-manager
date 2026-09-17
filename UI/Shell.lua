@@ -502,18 +502,19 @@ function SR:UpdateAdminReadOnly()
     if self.lbTargetDD then
         if canEdit then
             self.lbTargetDD:Show()
+            if self.lbTargetLabel then self.lbTargetLabel:Show() end
             UIDropDownMenu_Initialize(self.lbTargetDD, function(self, level)
                 level = level or 1
                 if level ~= 1 then return end
-                
+
                 local selfName = SR:GetLocalPlayerName()
                 local info = UIDropDownMenu_CreateInfo()
-                info.text = "Собі"
+                info.text = SR.L.UI_TARGET_SELF
                 info.value = selfName
                 info.checked = (SR.lbTargetPlayer == nil or SR.lbTargetPlayer == selfName)
                 info.func = function()
                     SR.lbTargetPlayer = selfName
-                    UIDropDownMenu_SetText(SR.lbTargetDD, "Собі")
+                    UIDropDownMenu_SetText(SR.lbTargetDD, SR.L.UI_TARGET_SELF)
                     if SR.UpdateLootBrowserItems then SR:UpdateLootBrowserItems() end
                 end
                 UIDropDownMenu_AddButton(info, level)
@@ -521,7 +522,7 @@ function SR:UpdateAdminReadOnly()
                 local members = SR:GetRaidMembers()
                 if #members > 0 then
                     local infoTitle = UIDropDownMenu_CreateInfo()
-                    infoTitle.text = "Рейд"
+                    infoTitle.text = SR.L.UI_TARGET_RAID_HEADER
                     infoTitle.isTitle = true
                     infoTitle.notCheckable = true
                     UIDropDownMenu_AddButton(infoTitle, level)
@@ -544,13 +545,17 @@ function SR:UpdateAdminReadOnly()
                 end
             end)
             if not SR.lbTargetPlayer or SR.lbTargetPlayer == SR:GetLocalPlayerName() then
-                UIDropDownMenu_SetText(self.lbTargetDD, "Собі")
+                UIDropDownMenu_SetText(self.lbTargetDD, SR.L.UI_TARGET_SELF)
             else
                 UIDropDownMenu_SetText(self.lbTargetDD, SR.lbTargetPlayer)
             end
         else
             self.lbTargetDD:Hide()
-            SR.lbTargetPlayer = nil
+            if self.lbTargetLabel then self.lbTargetLabel:Hide() end
+            if SR.lbTargetPlayer then
+                SR.lbTargetPlayer = nil
+                if SR.UpdateLootBrowserItems then SR:UpdateLootBrowserItems() end
+            end
         end
     end
 

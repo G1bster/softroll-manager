@@ -190,5 +190,10 @@ L.UI_START_ROLL_BTN             = "Почати рол (/rw)"
 L.UI_END_ROLL_BTN               = "Завершити рол"
 L.UI_EXPORT_TOOLTIP             = "Експорт софтів"
 L.LOOT_RESERVED_SUMMARY         = "%d гравців зарезервували цей предмет"
+L.UI_TARGET_LABEL               = "Кому:"
+L.UI_TARGET_SELF                = "Собі"
+L.UI_TARGET_RAID_HEADER         = "Рейд"
+L.UI_RESERVE_BTN                = "Засофтити x%d"
+L.UI_REMOVE_ITEM_TOOLTIP        = "Прибрати софт"
 
 
