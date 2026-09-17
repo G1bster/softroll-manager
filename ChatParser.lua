@@ -120,6 +120,7 @@ function SR:HandleIncoming(msg, sender, isWhisper)
     local isHelpCmd = (argsLower == "" or argsLower == "help" or argsLower == "допомога" or argsLower == "хелп" or argsLower == "?")
     if isHelpCmd then
         self:Reply(sender, isWhisper, self.L.WHISPER_HELP)
+        self:Reply(sender, isWhisper, self.L.WHISPER_HELP_2)
         return
     end
 

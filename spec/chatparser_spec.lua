@@ -363,10 +363,10 @@ describe("SR chat command parsing (ChatParser.lua)", function()
 
         it("recognizes help aliases 'sr допомога', 'sr ?'", function()
             SR:HandleIncoming("sr допомога", "Member", false)
-            assert.matches("Довідка", lastWhisperTo("Member"))
+            assert.is_true(anyWhisperTo("Member", "Довідка"))
 
             SR:HandleIncoming("sr ?", "Member", false)
-            assert.matches("Довідка", lastWhisperTo("Member"))
+            assert.is_true(anyWhisperTo("Member", "Довідка"))
         end)
 
         it("handles shift-clicks without spaces 'sr[link]', '!sr[link]', 'ср[link]', '!ср[link]'", function()
