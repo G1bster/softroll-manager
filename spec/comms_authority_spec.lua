@@ -210,6 +210,21 @@ describe("SR session authority and message-sender validation (Comms.lua)", funct
             SR:OnAddonMessage("O|Sneaky", "RAID", "Sneaky")
             assert.is_nil(SR.sessionCoHosts)
         end)
+
+        it("ignores a forged K reply from a non-host", function()
+            SR._pendingSRItemID = 49978
+            SR:OnAddonMessage("K|1|Fake success from Sneaky", "RAID", "Sneaky")
+            assert.are.equal(49978, SR._pendingSRItemID)
+            for _, msg in ipairs(wow.state.printed) do
+                assert.is_nil(msg:find("Fake success", 1, true))
+            end
+        end)
+
+        it("accepts a genuine K reply from the real host", function()
+            SR._pendingSRItemID = 49978
+            SR:OnAddonMessage("K|1|SR зареєстровано", "RAID", "Leader")
+            assert.is_nil(SR._pendingSRItemID)
+        end)
     end)
 
     describe("Anti-spoofing before any host is known yet (fresh login, no 'S|' received)", function()

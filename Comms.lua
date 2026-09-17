@@ -326,7 +326,9 @@ function SR:OnAddonMessage(message, channel, sender)
     elseif cmd == "A" then
         self:OnSRAddRequest(rest, senderName)
     elseif cmd == "K" then
-        self:OnSRAddReply(rest)
+        if self:IsTrustedSessionSender(senderName) then
+            self:OnSRAddReply(rest)
+        end
     elseif cmd == "Q" then
         self:OnSyncRequest(senderName)
     elseif cmd == "Y" then
@@ -852,6 +854,10 @@ function SR:OnSRManageRequest(data, senderName)
     end
 end
 
+--- Обробка вхідного "K|1|text" / "K|0|text" — відповідь хоста на нашу
+-- реєстрацію SR (A/M). Диспетчер уже перевірив IsTrustedSessionSender,
+-- інакше будь-хто в рейді міг би підробити фальшиве "SR зареєстровано"/
+-- "Помилка" будь-якому гравцю в приват.
 function SR:OnSRAddReply(data)
     local okFlag, text = data:match("^(%d)|(.*)$")
     if okFlag == "1" then
