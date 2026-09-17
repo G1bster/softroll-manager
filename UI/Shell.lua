@@ -548,7 +548,20 @@ function SR:UpdateAdminReadOnly()
     if self.ledgerAnnounceBtn then
         if readOnly then self.ledgerAnnounceBtn:Disable() else self.ledgerAnnounceBtn:Enable() end
     end
-    
+
+    -- Кнопка "Зберегти" (/reload) має сенс лише для того, хто тримає
+    -- авторитетну копію даних рейду — тобто активного хоста (або лідера
+    -- рейду/паті до старту сесії). У звичайного гравця/ко-хоста локальні
+    -- резерви — лише дзеркало того, що синхронізував хост, тож relог
+    -- нічого для нього не рятує.
+    if self.saveBtn then
+        if self:IsSessionHost() or (self:IsSessionLeader() and not self.sessionActive) then
+            self.saveBtn:Show()
+        else
+            self.saveBtn:Hide()
+        end
+    end
+
     if self.lbTargetDD then
         if canEdit then
             self.lbTargetDD:Show()
