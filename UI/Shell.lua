@@ -71,10 +71,14 @@ function SR:CreateUI()
     saveBg:SetAllPoints()
     saveBg:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
     saveBg:SetVertexColor(0.4, 0.4, 0.4, 0.8)
+    -- INV_Misc_Disk03 (флопі-диск) не рендерився в грі — невірний шлях
+    -- текстури, WoW мовчки нічого не малює замість помилки. ReadyCheck-Ready
+    -- (зелена галочка) вже підтверджено робочий: її пара ReadyCheck-NotReady
+    -- використовується в Ledger.lua ("не в рейді") без жодних скарг.
     local saveIcon = saveBtn:CreateTexture(nil, "ARTWORK")
-    saveIcon:SetPoint("TOPLEFT", 2, -2)
-    saveIcon:SetPoint("BOTTOMRIGHT", -2, 2)
-    saveIcon:SetTexture("Interface\\Icons\\INV_Misc_Disk03")
+    saveIcon:SetPoint("TOPLEFT", 3, -3)
+    saveIcon:SetPoint("BOTTOMRIGHT", -3, 3)
+    saveIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
     saveBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     saveBtn:SetScript("OnClick", function() ReloadUI() end)
     saveBtn:SetScript("OnEnter", function(self)

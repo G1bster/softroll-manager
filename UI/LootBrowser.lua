@@ -273,14 +273,17 @@ local function GetLBItemRow(container, index)
     end)
     row.removeBtn = removeBtn
 
-    -- Сердечко — додати/прибрати предмет з вішліста (замість колишньої
-    -- окремої кнопки "В обране" внизу панелі).
+    -- Зірка вішліста — додати/прибрати предмет з вішліста (замість колишньої
+    -- окремої кнопки "В обране" внизу панелі). INV_Misc_Heart_02 (сердечко)
+    -- не рендерився в грі (невірний шлях текстури), тож узяли
+    -- UI-RaidTargetingIcon_1 — ту саму зірку, яка вже давно й без проблем
+    -- показується як бейдж вішліста на іконці предмета нижче.
     local wlBtn = CreateFrame("Button", nil, row)
     wlBtn:SetSize(18, 18)
     wlBtn:SetPoint("RIGHT", -6, 0)
     local wlBtnTex = wlBtn:CreateTexture(nil, "ARTWORK")
     wlBtnTex:SetAllPoints()
-    wlBtnTex:SetTexture("Interface\\Icons\\INV_Misc_Heart_02")
+    wlBtnTex:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_1")
     wlBtn.tex = wlBtnTex
     wlBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     wlBtn:SetScript("OnClick", function(self)
@@ -313,15 +316,6 @@ local function GetLBItemRow(container, index)
     row.nameFS:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
     row.nameFS:SetWidth(300)
     row.nameFS:SetWordWrap(false)
-
-    -- Іконка вішліста (рейд-маркер зірка) — маленький бейдж на іконці
-    -- предмета, окремо від інтерактивного сердечка вище.
-    local wlIcon = row:CreateTexture(nil, "OVERLAY")
-    wlIcon:SetSize(16, 16)
-    wlIcon:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -6, 6)
-    wlIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_1")
-    wlIcon:Hide()
-    row.wlIcon = wlIcon
 
     -- SR бейдж фон видалено для кращого вигляду
 
@@ -623,15 +617,13 @@ function SR:UpdateLootBrowserItems()
             row.srFS:SetText("")
         end
 
-        -- Відображення іконки вішліста + стан сердечка (заповнене й
-        -- кольорове, якщо предмет вже в обраному, інакше приглушене сіре)
+        -- Стан зірки вішліста: яскрава золота, якщо предмет вже в обраному,
+        -- інакше приглушена сіра.
         if SR:IsInWishlist(itemID) then
-            row.wlIcon:Show()
-            row.wlBtn.tex:SetVertexColor(1, 0.25, 0.35)
+            row.wlBtn.tex:SetVertexColor(1, 0.82, 0)
             row.wlBtn.tex:SetDesaturated(false)
         else
-            row.wlIcon:Hide()
-            row.wlBtn.tex:SetVertexColor(0.5, 0.5, 0.5)
+            row.wlBtn.tex:SetVertexColor(0.45, 0.45, 0.45)
             row.wlBtn.tex:SetDesaturated(true)
         end
 
