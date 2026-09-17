@@ -870,13 +870,17 @@ local function GetLedgerRow(container, index)
     row.summaryFS:SetPoint("LEFT", 175, -10)
     row.summaryFS:SetWidth(160)
 
+    -- "Викор." (X/Y) та кнопки дій прив'язані до ПРАВОГО краю смуги іконок
+    -- (не до фіксованих координат) — інакше при LEDGER_MAX_ICONS=6 повністю
+    -- заповнена смуга (175..343px) наїжджає на текст "Викор." при
+    -- жорсткому x=320, що досяжно для гравця з персональним override ліміту.
     row.usedFS = SR:MakeLabel(row, 10, 0.75, 0.75, 0.75, "CENTER")
-    row.usedFS:SetPoint("LEFT", 320, 0)
+    row.usedFS:SetPoint("LEFT", row.iconStrip, "RIGHT", 8, 0)
     row.usedFS:SetWidth(50)
 
     row.editBtn = CreateFrame("Button", nil, row)
     row.editBtn:SetSize(20, 20)
-    row.editBtn:SetPoint("LEFT", 405, 0)
+    row.editBtn:SetPoint("LEFT", row.usedFS, "RIGHT", 4, 0)
     row.editBtn:SetNormalTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
     row.editBtn:SetHighlightTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
     if row.editBtn:GetHighlightTexture() then
@@ -891,7 +895,7 @@ local function GetLedgerRow(container, index)
 
     row.clearBtn = CreateFrame("Button", nil, row)
     row.clearBtn:SetSize(22, 22)
-    row.clearBtn:SetPoint("LEFT", 430, 0)
+    row.clearBtn:SetPoint("LEFT", row.editBtn, "RIGHT", 4, 0)
     row.clearBtn:SetNormalTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
     row.clearBtn:SetHighlightTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Highlight")
     row.clearBtn:SetPushedTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Down")
@@ -938,10 +942,12 @@ function SR:UpdateLedgerPlayers()
         self.ledgerHeaders.col2:SetText("Роль")
         self.ledgerHeaders.col2:Show()
         self.ledgerHeaders.col4:Show()
-        self.ledgerHeaders.col4:SetPoint("LEFT", 320, 0)
+        -- Вирівнюємо з новою позицією row.usedFS (прив'язана до правого краю
+        -- смуги іконок, а не до фіксованого x) — див. GetLedgerRow.
+        self.ledgerHeaders.col4:SetPoint("LEFT", self.ledgerHeaders.col3, "RIGHT", 8, 0)
         self.ledgerHeaders.col5:Show()
-        self.ledgerHeaders.col5:SetWidth(72)
-        self.ledgerHeaders.col5:SetPoint("LEFT", 380, 0)
+        self.ledgerHeaders.col5:SetWidth(50)
+        self.ledgerHeaders.col5:SetPoint("LEFT", self.ledgerHeaders.col4, "RIGHT", 4, 0)
     end
 
     -- ── Збираємо список гравців ──

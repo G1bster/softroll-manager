@@ -283,9 +283,12 @@ local function GetLBItemRow(container, index)
     row.removeBtn = removeBtn
 
     -- Назва предмета
+    -- Ширина 335 (було 380) — при довгій назві предмета старе значення
+    -- геометрично налазило на бейдж "X SR" праворуч (той анкориться
+    -- від правого краю рядка, а не має фіксованого x).
     row.nameFS = SR:MakeLabel(row, 11, 1, 0.82, 0, "LEFT")
     row.nameFS:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-    row.nameFS:SetWidth(380)
+    row.nameFS:SetWidth(335)
     row.nameFS:SetWordWrap(false)
 
     -- Іконка вішліста (рейд-маркер зірка)
