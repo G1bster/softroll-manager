@@ -160,7 +160,7 @@ function SR:BuildLootBrowser(parent)
 
     local targetDD = CreateFrame("Frame", "SRLootTargetDD", parent, "UIDropDownMenuTemplate")
     targetDD:SetPoint("LEFT", targetLabel, "RIGHT", -8, -2)
-    UIDropDownMenu_SetWidth(targetDD, 110)
+    UIDropDownMenu_SetWidth(targetDD, 80)
     self.lbTargetDD = targetDD
 
     -- ── Нижній ряд дій: [В обране] .......... [-][N][+] [Засофтити xN] ──
@@ -176,7 +176,7 @@ function SR:BuildLootBrowser(parent)
     end)
     self.lbWishlistBtn = wishlistBtn
 
-    local reserveBtn = SR:MakeButton(parent, format(SR.L.UI_RESERVE_BTN, 1), 150, 28)
+    local reserveBtn = SR:MakeButton(parent, format(SR.L.UI_RESERVE_BTN, 1), 115, 28)
     reserveBtn:SetPoint("BOTTOMRIGHT", -8, 8)
     reserveBtn:SetScript("OnClick", function()
         if not SR.lbSelectedItemID then
