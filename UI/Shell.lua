@@ -67,18 +67,11 @@ function SR:CreateUI()
     -- щоб 24x24 saveBtn мав той самий центр, треба top-offset -10, інакше
     -- кнопка виглядає вищою за решту кнопок заголовка.
     saveBtn:SetPoint("TOPLEFT", 10, -10)
-    local saveBg = saveBtn:CreateTexture(nil, "BACKGROUND")
-    saveBg:SetAllPoints()
-    saveBg:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
-    saveBg:SetVertexColor(0.4, 0.4, 0.4, 0.8)
-    -- INV_Misc_Disk03 (флопі-диск) не рендерився в грі — невірний шлях
-    -- текстури, WoW мовчки нічого не малює замість помилки. ReadyCheck-Ready
-    -- (зелена галочка) вже підтверджено робочий: її пара ReadyCheck-NotReady
-    -- використовується в Ledger.lua ("не в рейді") без жодних скарг.
+    -- Кастомна іконка дискети (Media/icon_save.tga) в кольорах аддону —
+    -- вже має власну золоту рамку/тінь, тож окремий фон-слот не потрібен.
     local saveIcon = saveBtn:CreateTexture(nil, "ARTWORK")
-    saveIcon:SetPoint("TOPLEFT", 3, -3)
-    saveIcon:SetPoint("BOTTOMRIGHT", -3, 3)
-    saveIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+    saveIcon:SetAllPoints()
+    saveIcon:SetTexture("Interface\\AddOns\\SoftRollManager\\Media\\icon_save.tga")
     saveBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     saveBtn:SetScript("OnClick", function() ReloadUI() end)
     saveBtn:SetScript("OnEnter", function(self)
@@ -669,12 +662,12 @@ function SR:CreateMinimapButton()
     bg:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -4)
     bg:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
 
-    -- Іконка
+    -- Іконка — кастомна гральна кістка (Media/icon_minimap.tga) в кольорах
+    -- аддону, замість заглушки INV_Misc_Note_03.
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetSize(20, 20)
     icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 6, -5)
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Note_03")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    icon:SetTexture("Interface\\AddOns\\SoftRollManager\\Media\\icon_minimap.tga")
 
     -- Рамка (золоте кільце)
     local border = btn:CreateTexture(nil, "OVERLAY")
