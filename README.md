@@ -38,8 +38,8 @@
 
 ### Структура коду
 
-- `Core.lua`, `Comms.lua`, `LootData.lua`, `ChatParser.lua` — бізнес-логіка (ліміти SR, синхронізація хост/клієнт, дані луту, парсинг чат-команд).
-- `UI/` — інтерфейс, розбитий за вкладками (`Widgets.lua` — спільні стилі/константи, `Shell.lua` — головне вікно, `Dashboard.lua`, `Ledger.lua`, `LootBrowser.lua`, `LootSession.lua`).
+- `Core.lua`, `Comms.lua`, `LootData.lua`, `ChatParser.lua`, `Locales.lua` — бізнес-логіка (ліміти SR, синхронізація хост/клієнт, дані луту, парсинг чат-команд, текстові константи).
+- `UI/` — інтерфейс, розбитий за вкладками (`Widgets.lua` — спільні стилі/константи, `Shell.lua` — головне вікно, `Dashboard.lua`, `Ledger.lua`, `LootBrowser.lua`, `LootSession.lua`, `DataRecoveryPopup.lua`).
 
 ### Лінтер (luacheck)
 
