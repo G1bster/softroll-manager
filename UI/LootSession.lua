@@ -20,7 +20,7 @@ function SR:BuildLootSession(parent)
     topBar:SetHeight(28)
 
     local btnBagLootTab = SR:MakeFlatTab(topBar, self.L.BAG_LOOT_TAB, 24)
-    btnBagLootTab:SetWidth(180)
+    btnBagLootTab:SetWidth(170)
     btnBagLootTab:SetPoint("LEFT", 0, 0)
     btnBagLootTab:SetScript("OnClick", function()
         SR:SetLootSessionMode("bag")
@@ -28,7 +28,7 @@ function SR:BuildLootSession(parent)
     self.btnBagLootTab = btnBagLootTab
 
     local btnActiveRollTab = SR:MakeFlatTab(topBar, self.L.BAG_LOOT_ACTIVE_ROLL, 24)
-    btnActiveRollTab:SetWidth(160)
+    btnActiveRollTab:SetWidth(170)
     btnActiveRollTab:SetPoint("LEFT", btnBagLootTab, "RIGHT", 6, 0)
     btnActiveRollTab:SetScript("OnClick", function()
         SR:SetLootSessionMode("roll")
