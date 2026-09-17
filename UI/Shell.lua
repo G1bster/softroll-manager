@@ -459,6 +459,23 @@ function SR:UpdateSessionBanner()
 end
 
 
+--- Перевстановлює якір infoBtn залежно від того, чи показана settingsBtn
+-- (видима лише для РЛ) — інакше для звичайного гравця (без settingsBtn)
+-- infoBtn лишається прив'язаною до її старої, тепер невидимої, позиції,
+-- і між іконками "i" та експортом з'являється порожній проміжок.
+function SR:UpdateHeaderButtonRow(showSettings)
+    if not self.settingsBtn or not self.infoBtn or not self.exportBtn then return end
+    if showSettings then
+        self.settingsBtn:Show()
+        self.infoBtn:ClearAllPoints()
+        self.infoBtn:SetPoint("RIGHT", self.settingsBtn, "LEFT", -4, 0)
+    else
+        self.settingsBtn:Hide()
+        self.infoBtn:ClearAllPoints()
+        self.infoBtn:SetPoint("RIGHT", self.exportBtn, "LEFT", -4, 0)
+    end
+end
+
 function SR:UpdateAdminReadOnly()
     local readOnly = self:IsSessionReadOnly()
     local canEdit  = self:CanEditSession()
@@ -490,7 +507,7 @@ function SR:UpdateAdminReadOnly()
             self:SelectTab(3)
         end
         -- Ранній вихід — решту логіки не застосовуємо
-        if self.settingsBtn then self.settingsBtn:Hide() end
+        SR:UpdateHeaderButtonRow(false)
         return
     end
 
@@ -531,13 +548,7 @@ function SR:UpdateAdminReadOnly()
         end
     end
 
-    if self.settingsBtn then
-        if IsRaidLeader() then
-            self.settingsBtn:Show()
-        else
-            self.settingsBtn:Hide()
-        end
-    end
+    SR:UpdateHeaderButtonRow(IsRaidLeader())
 
     -- Елементи керування дашборду
     if self.lockBtn then
