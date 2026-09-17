@@ -179,7 +179,7 @@ function SR:BuildLootBrowser(parent)
     end)
     self.lbReserveBtn = reserveBtn
 
-    local incBtn = SR:MakeButton(parent, "+", 24, 28)
+    local incBtn = SR:MakeButton(parent, "+", 18, 28)
     incBtn:SetPoint("RIGHT", reserveBtn, "LEFT", -6, 0)
     incBtn:SetScript("OnClick", function()
         SR.lbReserveCount = (SR.lbReserveCount or 1) + 1
@@ -197,7 +197,7 @@ function SR:BuildLootBrowser(parent)
     countFS:SetText("1")
     self.lbCountFS = countFS
 
-    local decBtn = SR:MakeButton(parent, "-", 24, 28)
+    local decBtn = SR:MakeButton(parent, "-", 18, 28)
     decBtn:SetPoint("RIGHT", countBox, "LEFT", -2, 0)
     decBtn:SetScript("OnClick", function()
         if (SR.lbReserveCount or 1) > 1 then
