@@ -468,8 +468,8 @@ function SR:BuildLedger(parent)
     ColHdr("Гравець",         6,   120, "LEFT", "col1")
     ColHdr("Роль",           130,  40, "LEFT", "col2")
     ColHdr("Предмети",       175, 168, "LEFT", "col3")
-    ColHdr("Викор.",         340,  50, "CENTER", "col4")
-    ColHdr("Дії",           405,  50, "CENTER", "col5")
+    ColHdr("Викор.",         340,  34, "CENTER", "col4")
+    ColHdr("Дії",           405,  58, "CENTER", "col5")
 
     local sep = SR:MakeAccentLine(parent, SR.UI.C.sep[1], SR.UI.C.sep[2], SR.UI.C.sep[3], SR.UI.C.sep[4])
     sep:SetPoint("TOPLEFT",  8, -62)
@@ -714,7 +714,7 @@ local function GetLedgerRow(container, index)
 
     -- Кнопка анонсу
     local annBtn = CreateFrame("Button", nil, row)
-    annBtn:SetSize(22, 22)
+    annBtn:SetSize(18, 18)
     annBtn:SetPoint("LEFT", 380, 0)
     annBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Up")
     annBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Up")
@@ -874,13 +874,21 @@ local function GetLedgerRow(container, index)
     -- (не до фіксованих координат) — інакше при LEDGER_MAX_ICONS=6 повністю
     -- заповнена смуга (175..343px) наїжджає на текст "Викор." при
     -- жорсткому x=320, що досяжно для гравця з персональним override ліміту.
+    --
+    -- Ширини/зазори тут навмисно компактні: реальна видима ширина рядка
+    -- (446px — вужча за 480px "hdr", бо рядки всередині ScrollFrame з
+    -- вирахуваним місцем під скролбар) залишає від правого краю смуги
+    -- іконок (343) лише ~100px на "Викор." + 3 кнопки дій. Ширші значення
+    -- виштовхували clearBtn за межі видимої/непроскроленої області, де
+    -- ScrollFrame його обрізає — кнопка "Очистити всі софти" гравця
+    -- ставала невидимою.
     row.usedFS = SR:MakeLabel(row, 10, 0.75, 0.75, 0.75, "CENTER")
     row.usedFS:SetPoint("LEFT", row.iconStrip, "RIGHT", 8, 0)
-    row.usedFS:SetWidth(50)
+    row.usedFS:SetWidth(34)
 
     row.editBtn = CreateFrame("Button", nil, row)
-    row.editBtn:SetSize(20, 20)
-    row.editBtn:SetPoint("LEFT", row.usedFS, "RIGHT", 4, 0)
+    row.editBtn:SetSize(16, 16)
+    row.editBtn:SetPoint("LEFT", row.usedFS, "RIGHT", 2, 0)
     row.editBtn:SetNormalTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
     row.editBtn:SetHighlightTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
     if row.editBtn:GetHighlightTexture() then
@@ -894,8 +902,8 @@ local function GetLedgerRow(container, index)
     row.editBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     row.clearBtn = CreateFrame("Button", nil, row)
-    row.clearBtn:SetSize(22, 22)
-    row.clearBtn:SetPoint("LEFT", row.editBtn, "RIGHT", 4, 0)
+    row.clearBtn:SetSize(18, 18)
+    row.clearBtn:SetPoint("LEFT", row.editBtn, "RIGHT", 2, 0)
     row.clearBtn:SetNormalTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Up")
     row.clearBtn:SetHighlightTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Highlight")
     row.clearBtn:SetPushedTexture("Interface\\BUTTONS\\UI-GroupLoot-Pass-Down")
@@ -946,8 +954,8 @@ function SR:UpdateLedgerPlayers()
         -- смуги іконок, а не до фіксованого x) — див. GetLedgerRow.
         self.ledgerHeaders.col4:SetPoint("LEFT", self.ledgerHeaders.col3, "RIGHT", 8, 0)
         self.ledgerHeaders.col5:Show()
-        self.ledgerHeaders.col5:SetWidth(50)
-        self.ledgerHeaders.col5:SetPoint("LEFT", self.ledgerHeaders.col4, "RIGHT", 4, 0)
+        self.ledgerHeaders.col5:SetWidth(58)
+        self.ledgerHeaders.col5:SetPoint("LEFT", self.ledgerHeaders.col4, "RIGHT", 2, 0)
     end
 
     -- ── Збираємо список гравців ──
@@ -1120,7 +1128,7 @@ function SR:UpdateLedgerPlayers()
         if showAnn then
             row.annBtn:Show()
             row.annBtn:ClearAllPoints()
-            row.annBtn:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+            row.annBtn:SetPoint("LEFT", anchor, "RIGHT", 2, 0)
             anchor = row.annBtn
         else
             row.annBtn:Hide()
@@ -1129,7 +1137,7 @@ function SR:UpdateLedgerPlayers()
         if showEdit then
             row.editBtn:Show()
             row.editBtn:ClearAllPoints()
-            row.editBtn:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+            row.editBtn:SetPoint("LEFT", anchor, "RIGHT", 2, 0)
             anchor = row.editBtn
         else
             row.editBtn:Hide()
@@ -1138,7 +1146,7 @@ function SR:UpdateLedgerPlayers()
         if showClear then
             row.clearBtn:Show()
             row.clearBtn:ClearAllPoints()
-            row.clearBtn:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+            row.clearBtn:SetPoint("LEFT", anchor, "RIGHT", 2, 0)
         else
             row.clearBtn:Hide()
         end
