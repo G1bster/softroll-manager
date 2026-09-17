@@ -821,6 +821,16 @@ local function GetLedgerRow(container, index)
             SR:AnnouncePlayerSR(row.playerName)
         end
     end)
+    annBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if SR.ledgerActiveSubTab == "bosses" then
+            GameTooltip:SetText("Анонсувати луп боса в чат")
+        else
+            GameTooltip:SetText("Анонсувати софти гравця в чат")
+        end
+        GameTooltip:Show()
+    end)
+    annBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row.annBtn = annBtn
 
     -- Ряд іконок предметів
