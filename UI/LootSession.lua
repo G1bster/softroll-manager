@@ -22,12 +22,20 @@ function SR:BuildLootSession(parent)
     -- Іконка замість текстової кнопки оновлення: з трьома текстовими
     -- елементами (дві вкладки + повнорозмірна кнопка) у топбарі майже не
     -- лишалось зазору — текст "Оновити сумки" наїжджав на вкладку
-    -- "Активний розрол".
+    -- "Активний розрол". UI-RefreshButton не рендерився в грі (черговий
+    -- невірний шлях текстури) — та сама золота рамка-база, що й в інших
+    -- іконок аддону, + кастомна золота стрілка-оновлення (Media/icon_refresh.tga)
+    -- маленьким оверлеєм.
     local btnRefreshBags = CreateFrame("Button", nil, topBar)
     btnRefreshBags:SetSize(24, 24)
     btnRefreshBags:SetPoint("RIGHT", 0, 0)
-    btnRefreshBags:SetNormalTexture("Interface\\Buttons\\UI-RefreshButton")
+    btnRefreshBags:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    btnRefreshBags:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
     btnRefreshBags:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    local btnRefreshBagsIcon = btnRefreshBags:CreateTexture(nil, "OVERLAY")
+    btnRefreshBagsIcon:SetSize(14, 14)
+    btnRefreshBagsIcon:SetPoint("CENTER", btnRefreshBags, "CENTER", 0, -1)
+    btnRefreshBagsIcon:SetTexture("Interface\\AddOns\\SoftRollManager\\Media\\icon_refresh.tga")
     btnRefreshBags:SetScript("OnClick", function()
         SR:RefreshBagLoot()
     end)

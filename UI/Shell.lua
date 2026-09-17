@@ -67,12 +67,17 @@ function SR:CreateUI()
     -- щоб 24x24 saveBtn мав той самий центр, треба top-offset -10, інакше
     -- кнопка виглядає вищою за решту кнопок заголовка.
     saveBtn:SetPoint("TOPLEFT", 10, -10)
-    -- Кастомна іконка дискети (Media/icon_save.tga) в кольорах аддону —
-    -- вже має власну золоту рамку/тінь, тож окремий фон-слот не потрібен.
-    local saveIcon = saveBtn:CreateTexture(nil, "ARTWORK")
-    saveIcon:SetAllPoints()
-    saveIcon:SetTexture("Interface\\AddOns\\SoftRollManager\\Media\\icon_save.tga")
+    -- Та сама золота рамка-база, що й у info/export/settings — для
+    -- однакового розміру й стилю з рештою кнопок заголовка. Кастомна
+    -- іконка дискети (Media/icon_save.tga) тепер без власної рамки —
+    -- лягає маленьким оверлеєм 14x14 поверх спільної рамки, як і в них.
+    saveBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+    saveBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
     saveBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    local saveIcon = saveBtn:CreateTexture(nil, "OVERLAY")
+    saveIcon:SetSize(14, 14)
+    saveIcon:SetPoint("CENTER", saveBtn, "CENTER", 0, -1)
+    saveIcon:SetTexture("Interface\\AddOns\\SoftRollManager\\Media\\icon_save.tga")
     saveBtn:SetScript("OnClick", function() ReloadUI() end)
     saveBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_NONE")
