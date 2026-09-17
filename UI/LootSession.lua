@@ -35,11 +35,24 @@ function SR:BuildLootSession(parent)
     end)
     self.btnActiveRollTab = btnActiveRollTab
 
-    local btnRefreshBags = SR:MakeButton(topBar, self.L.BAG_LOOT_REFRESH, 130, 24)
+    -- Іконка замість текстової кнопки: з трьома текстовими елементами (дві
+    -- вкладки + повнорозмірна кнопка) у топбарі майже не лишалось зазору
+    -- (~480px доступно, ~486px потрібно) — текст "Оновити сумки" наїжджав
+    -- на вкладку "Активний розрол".
+    local btnRefreshBags = CreateFrame("Button", nil, topBar)
+    btnRefreshBags:SetSize(24, 24)
     btnRefreshBags:SetPoint("RIGHT", 0, 0)
+    btnRefreshBags:SetNormalTexture("Interface\\Buttons\\UI-RefreshButton")
+    btnRefreshBags:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     btnRefreshBags:SetScript("OnClick", function()
         SR:RefreshBagLoot()
     end)
+    btnRefreshBags:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText(SR.L.BAG_LOOT_REFRESH)
+        GameTooltip:Show()
+    end)
+    btnRefreshBags:SetScript("OnLeave", function() GameTooltip:Hide() end)
     self.btnRefreshBags = btnRefreshBags
 
     local sepNav = parent:CreateTexture(nil, "ARTWORK")
