@@ -80,11 +80,11 @@ function SR:BuildLootSession(parent)
         fs:SetWidth(w)
         fs:SetText(text)
     end
-    BagCol("Предмет",     10, 180)
-    BagCol("К-ть",        195, 35)
-    BagCol("Софт-роли",   235, 85)
-    BagCol("Таймер",      325, 85)
-    BagCol("Дія",         415, 65)
+    BagCol("Предмет",     10, 145)
+    BagCol("К-ть",        180, 35)
+    BagCol("Софт-роли",   220, 85)
+    BagCol("Таймер",      310, 85)
+    BagCol("Дія",         400, 65)
 
     local sepBag = bagPanel:CreateTexture(nil, "ARTWORK")
     sepBag:SetHeight(1)
@@ -341,7 +341,7 @@ function SR:GetBagLootRow(container, index)
     -- Item name / link (clickable for chat paste / tooltip / selection)
     local nameBtn = CreateFrame("Button", nil, row)
     nameBtn:SetPoint("LEFT", iconBtn, "RIGHT", 6, 0)
-    nameBtn:SetSize(160, 22)
+    nameBtn:SetSize(145, 22)
     local nameFS = SR:MakeLabel(nameBtn, 11, 1, 1, 1, "LEFT")
     nameFS:SetAllPoints()
     row.nameFS = nameFS
@@ -365,22 +365,25 @@ function SR:GetBagLootRow(container, index)
 
     -- Count
     row.countFS = SR:MakeLabel(row, 11, 0.85, 0.85, 0.85, "CENTER")
-    row.countFS:SetPoint("LEFT", 195, 0)
+    row.countFS:SetPoint("LEFT", 180, 0)
     row.countFS:SetWidth(35)
 
     -- SR Badge
     row.srBadge = SR:MakeLabel(row, 11, 0.4, 1, 0.4, "LEFT")
-    row.srBadge:SetPoint("LEFT", 235, 0)
+    row.srBadge:SetPoint("LEFT", 220, 0)
     row.srBadge:SetWidth(85)
 
     -- Trade Timer Badge
     row.timerBadge = SR:MakeLabel(row, 11, 1, 1, 1, "LEFT")
-    row.timerBadge:SetPoint("LEFT", 325, 0)
+    row.timerBadge:SetPoint("LEFT", 310, 0)
     row.timerBadge:SetWidth(85)
 
     -- Distribute button
+    -- x=400, ширина 58 → закінчується на 458px, що влазить у видиму
+    -- область скролу (462px = 496px панелі − 6 відступ − 28 під скролбар);
+    -- на x=415 (стара позиція) кнопка обрізалась скролом на ~11px.
     local rollBtn = SR:MakeButton(row, self.L.BAG_LOOT_DISTRIBUTE_BTN, 58, 20)
-    rollBtn:SetPoint("LEFT", 415, 0)
+    rollBtn:SetPoint("LEFT", 400, 0)
     row.rollBtn = rollBtn
 
     self.bagLootRows[index] = row
