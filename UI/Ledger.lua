@@ -1107,22 +1107,21 @@ function SR:UpdateLedgerPlayers()
 
         local canEditSession = SR:CanEditSession()
 
-        -- Count how many action buttons will be visible
+        -- Кнопки дій прив'язані ланцюжком до правого краю usedFS (яка сама
+        -- прив'язана до смуги іконок) — не до фіксованих x, інакше вони
+        -- розходяться з колонкою "Дії" щоразу, коли змінюється склад
+        -- видимих кнопок або ширина попередніх колонок.
         local showAnn = canEditSession
         local showEdit = canEditSession
         local showClear = canEdit
-        local btnCount = (showAnn and 1 or 0) + (showEdit and 1 or 0) + (showClear and 1 or 0)
-        
-        -- Center of "Дії" column is around 405 (header at 380, width ~50)
-        local actionSpacing = 25
-        local totalWidth = btnCount > 0 and ((btnCount - 1) * actionSpacing) or 0
-        local actionX = 405 - totalWidth / 2 - 10  -- start so group is centered
+
+        local anchor = row.usedFS
 
         if showAnn then
             row.annBtn:Show()
             row.annBtn:ClearAllPoints()
-            row.annBtn:SetPoint("LEFT", actionX, 0)
-            actionX = actionX + actionSpacing
+            row.annBtn:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+            anchor = row.annBtn
         else
             row.annBtn:Hide()
         end
@@ -1130,8 +1129,8 @@ function SR:UpdateLedgerPlayers()
         if showEdit then
             row.editBtn:Show()
             row.editBtn:ClearAllPoints()
-            row.editBtn:SetPoint("LEFT", actionX, 0)
-            actionX = actionX + actionSpacing
+            row.editBtn:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
+            anchor = row.editBtn
         else
             row.editBtn:Hide()
         end
@@ -1139,7 +1138,7 @@ function SR:UpdateLedgerPlayers()
         if showClear then
             row.clearBtn:Show()
             row.clearBtn:ClearAllPoints()
-            row.clearBtn:SetPoint("LEFT", actionX, 0)
+            row.clearBtn:SetPoint("LEFT", anchor, "RIGHT", 4, 0)
         else
             row.clearBtn:Hide()
         end

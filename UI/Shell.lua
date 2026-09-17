@@ -62,14 +62,20 @@ function SR:CreateUI()
     -----------------------------------------------------------
     local saveBtn = CreateFrame("Button", nil, f)
     saveBtn:SetSize(24, 24)
-    saveBtn:SetPoint("TOPLEFT", 10, -6)
-    saveBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
-    saveBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
-    saveBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    local saveIcon = saveBtn:CreateTexture(nil, "OVERLAY")
+    -- y = -10, не -6: close (UIPanelCloseButton) — це 32x32 фрейм, тож його
+    -- візуальний центр при TOPRIGHT -6 лежить на y=-22 від верху вікна;
+    -- щоб 24x24 saveBtn мав той самий центр, треба top-offset -10, інакше
+    -- кнопка виглядає вищою за решту кнопок заголовка.
+    saveBtn:SetPoint("TOPLEFT", 10, -10)
+    local saveBg = saveBtn:CreateTexture(nil, "BACKGROUND")
+    saveBg:SetAllPoints()
+    saveBg:SetTexture("Interface\\Buttons\\UI-EmptySlot-White")
+    saveBg:SetVertexColor(0.4, 0.4, 0.4, 0.8)
+    local saveIcon = saveBtn:CreateTexture(nil, "ARTWORK")
+    saveIcon:SetPoint("TOPLEFT", 2, -2)
+    saveIcon:SetPoint("BOTTOMRIGHT", -2, 2)
     saveIcon:SetTexture("Interface\\Icons\\INV_Misc_Disk03")
-    saveIcon:SetSize(14, 14)
-    saveIcon:SetPoint("CENTER", saveBtn, "CENTER", 0, -1)
+    saveBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     saveBtn:SetScript("OnClick", function() ReloadUI() end)
     saveBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_NONE")
