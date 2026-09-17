@@ -25,7 +25,11 @@ function SR:BuildLootSession(parent)
     -- Вкладки нижче анкоряться відносно цієї кнопки і самі підлаштовують
     -- свою ширину під те, скільки місця вона займає.
     local btnRefreshBags = SR:MakeButton(topBar, self.L.BAG_LOOT_REFRESH, 130, 24)
-    btnRefreshBags:SetPoint("RIGHT", 0, 0)
+    -- TOPRIGHT, не RIGHT: вкладки нижче top-aligned (TOPLEFT) у 24px висоту
+    -- всередині 28px topBar, тож їхній візуальний центр — на y=12, а не на
+    -- геометричному центрі topBar (y=14). RIGHT-анкор центрував би цю
+    -- кнопку по topBar і зсував її на 2px нижче за вкладки.
+    btnRefreshBags:SetPoint("TOPRIGHT", topBar, "TOPRIGHT", 0, 0)
     btnRefreshBags:SetScript("OnClick", function()
         SR:RefreshBagLoot()
     end)
