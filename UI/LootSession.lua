@@ -19,26 +19,10 @@ function SR:BuildLootSession(parent)
     topBar:SetPoint("TOPRIGHT", -8, -6)
     topBar:SetHeight(28)
 
-    local btnBagLootTab = SR:MakeFlatTab(topBar, self.L.BAG_LOOT_TAB, 24)
-    btnBagLootTab:SetWidth(170)
-    btnBagLootTab:SetPoint("LEFT", 0, 0)
-    btnBagLootTab:SetScript("OnClick", function()
-        SR:SetLootSessionMode("bag")
-    end)
-    self.btnBagLootTab = btnBagLootTab
-
-    local btnActiveRollTab = SR:MakeFlatTab(topBar, self.L.BAG_LOOT_ACTIVE_ROLL, 24)
-    btnActiveRollTab:SetWidth(170)
-    btnActiveRollTab:SetPoint("LEFT", btnBagLootTab, "RIGHT", 6, 0)
-    btnActiveRollTab:SetScript("OnClick", function()
-        SR:SetLootSessionMode("roll")
-    end)
-    self.btnActiveRollTab = btnActiveRollTab
-
-    -- Іконка замість текстової кнопки: з трьома текстовими елементами (дві
-    -- вкладки + повнорозмірна кнопка) у топбарі майже не лишалось зазору
-    -- (~480px доступно, ~486px потрібно) — текст "Оновити сумки" наїжджав
-    -- на вкладку "Активний розрол".
+    -- Іконка замість текстової кнопки оновлення: з трьома текстовими
+    -- елементами (дві вкладки + повнорозмірна кнопка) у топбарі майже не
+    -- лишалось зазору — текст "Оновити сумки" наїжджав на вкладку
+    -- "Активний розрол".
     local btnRefreshBags = CreateFrame("Button", nil, topBar)
     btnRefreshBags:SetSize(24, 24)
     btnRefreshBags:SetPoint("RIGHT", 0, 0)
@@ -54,6 +38,30 @@ function SR:BuildLootSession(parent)
     end)
     btnRefreshBags:SetScript("OnLeave", function() GameTooltip:Hide() end)
     self.btnRefreshBags = btnRefreshBags
+
+    -- Вкладки розтягнуті на всю доступну ширину (до кнопки оновлення) і
+    -- діляться порівну навпіл — той самий патерн, що й для пар вкладок в
+    -- Ledger.lua/LootBrowser.lua, а не фіксована ширина 170px, через яку
+    -- лишалась порожня ділянка перед кнопкою оновлення.
+    local tabsArea = CreateFrame("Frame", nil, topBar)
+    tabsArea:SetPoint("TOPLEFT", topBar, "TOPLEFT", 0, 0)
+    tabsArea:SetPoint("BOTTOMRIGHT", btnRefreshBags, "BOTTOMLEFT", -8, 0)
+
+    local btnBagLootTab = SR:MakeFlatTab(tabsArea, self.L.BAG_LOOT_TAB, 24)
+    btnBagLootTab:SetPoint("TOPLEFT", tabsArea, "TOPLEFT", 0, 0)
+    btnBagLootTab:SetPoint("RIGHT", tabsArea, "CENTER", -2, 0)
+    btnBagLootTab:SetScript("OnClick", function()
+        SR:SetLootSessionMode("bag")
+    end)
+    self.btnBagLootTab = btnBagLootTab
+
+    local btnActiveRollTab = SR:MakeFlatTab(tabsArea, self.L.BAG_LOOT_ACTIVE_ROLL, 24)
+    btnActiveRollTab:SetPoint("LEFT", tabsArea, "CENTER", 2, 0)
+    btnActiveRollTab:SetPoint("TOPRIGHT", tabsArea, "TOPRIGHT", 0, 0)
+    btnActiveRollTab:SetScript("OnClick", function()
+        SR:SetLootSessionMode("roll")
+    end)
+    self.btnActiveRollTab = btnActiveRollTab
 
     local sepNav = parent:CreateTexture(nil, "ARTWORK")
     sepNav:SetHeight(1)
