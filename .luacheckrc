@@ -36,7 +36,7 @@ read_globals = {
     "UIDropDownMenu_SetWidth", "UIDropDownMenu_SetText",
     "UIDropDownMenu_EnableDropDown", "UIDropDownMenu_DisableDropDown",
     "UIDROPDOWNMENU_MENU_VALUE", "UIDROPDOWNMENU_OPEN_MENU",
-    "StaticPopup_Show",
+    "StaticPopup_Show", "ReloadUI",
     "format", "strtrim", "tinsert", "wipe",
 }
 
