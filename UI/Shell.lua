@@ -100,11 +100,33 @@ function SR:CreateUI()
     end)
 
     -----------------------------------------------------------
+    -- КНОПКА "ІНФО" (автор аддону / для кого зроблено)
+    -----------------------------------------------------------
+    local infoBtn = CreateFrame("Button", nil, f)
+    infoBtn:SetSize(24, 24)
+    infoBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    infoBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+    infoBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    local infoIcon = infoBtn:CreateTexture(nil, "OVERLAY")
+    infoIcon:SetTexture("Interface\\FriendsFrame\\InformationIcon")
+    infoIcon:SetSize(14, 14)
+    infoIcon:SetPoint("CENTER", infoBtn, "CENTER", 0, -1)
+    infoBtn:SetScript("OnClick", function() SR:ToggleCreditsPopup() end)
+    infoBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine("Про аддон")
+        GameTooltip:Show()
+    end)
+    infoBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.infoBtn = infoBtn
+
+    -----------------------------------------------------------
     -- КНОПКА НАЛАШТУВАНЬ (шестірня біля експорту)
     -----------------------------------------------------------
     local settingsBtn = CreateFrame("Button", nil, f)
     settingsBtn:SetSize(24, 24)
     settingsBtn:SetPoint("RIGHT", exportBtn, "LEFT", -4, 0)
+    infoBtn:SetPoint("RIGHT", settingsBtn, "LEFT", -4, 0)
     settingsBtn:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
     settingsBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     
@@ -699,6 +721,57 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 -- Settings Frame replaced by DropDown Menu
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║                ПОПАП "ПРО АДДОН" (автор / для кого)     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+function SR:ToggleCreditsPopup()
+    if self.creditsPopup and self.creditsPopup:IsShown() then
+        self.creditsPopup:Hide()
+        return
+    end
+    if not self.creditsPopup then
+        local popup = CreateFrame("Frame", "SRCreditsPopup", UIParent)
+        popup:SetSize(260, 140)
+        popup:SetPoint("CENTER")
+        SR:ApplyDialogBackdrop(popup, 0.08, 0.08, 0.12, 0.98)
+        popup:SetFrameStrata("DIALOG")
+        popup:SetFrameLevel(120)
+        popup:SetMovable(true)
+        popup:EnableMouse(true)
+        popup:RegisterForDrag("LeftButton")
+        popup:SetScript("OnDragStart", popup.StartMoving)
+        popup:SetScript("OnDragStop",  popup.StopMovingOrSizing)
+        popup:Hide()
+        tinsert(UISpecialFrames, "SRCreditsPopup")
+
+        local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", -2, -2)
+
+        local topLine = SR:MakeAccentLine(popup, SR.UI.C.gold[1], SR.UI.C.gold[2], SR.UI.C.gold[3], 0.75)
+        topLine:SetPoint("TOPLEFT",  popup, "TOPLEFT",  14, -12)
+        topLine:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -14, -12)
+
+        local titleFS = SR:MakeLabel(popup, 12, SR.UI.C.gold[1], SR.UI.C.gold[2], SR.UI.C.gold[3])
+        titleFS:SetPoint("TOP", 0, -18)
+        titleFS:SetText("SoftRoll Manager")
+
+        local authorFS = SR:MakeLabel(popup, 11, 1, 1, 1, "CENTER")
+        authorFS:SetPoint("TOP", titleFS, "BOTTOM", 0, -16)
+        authorFS:SetWidth(230)
+        authorFS:SetText("Автор: |cffffcc00Гризун|r")
+
+        local forFS = SR:MakeLabel(popup, 11, 0.85, 0.85, 0.85, "CENTER")
+        forFS:SetPoint("TOP", authorFS, "BOTTOM", 0, -10)
+        forFS:SetWidth(230)
+        forFS:SetWordWrap(true)
+        forFS:SetText("Зроблено для |cffffcc00Белаз|r\nгільдія |cff40c040GARAGE|r")
+
+        self.creditsPopup = popup
+    end
+    self.creditsPopup:Show()
+end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║                ВІКНО ІНФО (INFO)                        ║
