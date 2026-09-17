@@ -195,5 +195,7 @@ L.UI_TARGET_SELF                = "Собі"
 L.UI_TARGET_RAID_HEADER         = "Рейд"
 L.UI_RESERVE_BTN                = "Засофтити x%d"
 L.UI_REMOVE_ITEM_TOOLTIP        = "Прибрати софт"
+L.UI_WISHLIST_ADD_TOOLTIP       = "Додати в обране"
+L.UI_WISHLIST_REMOVE_TOOLTIP    = "Прибрати з обраного"
 
 

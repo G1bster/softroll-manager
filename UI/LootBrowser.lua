@@ -131,7 +131,7 @@ function SR:BuildLootBrowser(parent)
     -- ── Права панель: Список предметів ──
     local itemPanel = CreateFrame("Frame", nil, parent)
     itemPanel:SetPoint("TOPLEFT", 6, -68)
-    itemPanel:SetPoint("BOTTOMRIGHT", -6, 70)
+    itemPanel:SetPoint("BOTTOMRIGHT", -6, 44)
     SR:ApplyPanelStyle(itemPanel, 0.06, 0.06, 0.10, 0.95)
 
     local itemScroll = CreateFrame("ScrollFrame", "SRItemScroll", itemPanel, "UIPanelScrollFrameTemplate")
@@ -151,10 +151,14 @@ function SR:BuildLootBrowser(parent)
     self.lbItemChild = itemChild
     self.lbItemRows  = {}
 
-    -- ── Ряд "Кому" (лише для РЛ/ко-хоста — показ/приховування керує
-    -- SR:UpdateAdminReadOnly у UI/Shell.lua) ──
+    -- ── Єдиний нижній ряд: "Кому:" [дропдаун] .......... [-][N][+] [Засофтити xN] ──
+    -- (лише для РЛ/ко-хоста — показ/приховування керує SR:UpdateAdminReadOnly
+    -- у UI/Shell.lua). Раніше "Кому" було окремим рядком над кнопкою
+    -- "В обране" — та кнопка прибрана (вішліст тепер додається/прибирається
+    -- сердечком на кожному рядку предмета, див. GetLBItemRow), тож дропдаун
+    -- зайняв її місце й весь блок дій влазить в один рядок.
     local targetLabel = SR:MakeLabel(parent, 11, 0.85, 0.85, 0.55)
-    targetLabel:SetPoint("BOTTOMLEFT", 10, 42)
+    targetLabel:SetPoint("BOTTOMLEFT", 8, 14)
     targetLabel:SetText(SR.L.UI_TARGET_LABEL)
     self.lbTargetLabel = targetLabel
 
@@ -162,19 +166,6 @@ function SR:BuildLootBrowser(parent)
     targetDD:SetPoint("LEFT", targetLabel, "RIGHT", -8, -2)
     UIDropDownMenu_SetWidth(targetDD, 80)
     self.lbTargetDD = targetDD
-
-    -- ── Нижній ряд дій: [В обране] .......... [-][N][+] [Засофтити xN] ──
-    local wishlistBtn = SR:MakeButton(parent, "В обране", 140, 28)
-    wishlistBtn:SetPoint("BOTTOMLEFT", 8, 8)
-    wishlistBtn:SetScript("OnClick", function()
-        if not SR.lbSelectedItemID then return end
-        SR:ToggleWishlistItem(SR.lbSelectedItemID)
-        SR:UpdateLootBrowserItems()
-        if SR.lbActiveSubTab == "wishlist" then
-            SR:UpdateLootBrowser()
-        end
-    end)
-    self.lbWishlistBtn = wishlistBtn
 
     local reserveBtn = SR:MakeButton(parent, format(SR.L.UI_RESERVE_BTN, 1), 115, 28)
     reserveBtn:SetPoint("BOTTOMRIGHT", -8, 8)
@@ -282,16 +273,49 @@ local function GetLBItemRow(container, index)
     end)
     row.removeBtn = removeBtn
 
+    -- Сердечко — додати/прибрати предмет з вішліста (замість колишньої
+    -- окремої кнопки "В обране" внизу панелі).
+    local wlBtn = CreateFrame("Button", nil, row)
+    wlBtn:SetSize(18, 18)
+    wlBtn:SetPoint("RIGHT", -6, 0)
+    local wlBtnTex = wlBtn:CreateTexture(nil, "ARTWORK")
+    wlBtnTex:SetAllPoints()
+    wlBtnTex:SetTexture("Interface\\Icons\\INV_Misc_Heart_02")
+    wlBtn.tex = wlBtnTex
+    wlBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    wlBtn:SetScript("OnClick", function(self)
+        local r = self:GetParent()
+        if not r.itemID then return end
+        SR:ToggleWishlistItem(r.itemID)
+        SR:UpdateLootBrowserItems()
+        if SR.lbActiveSubTab == "wishlist" then
+            SR:UpdateLootBrowser()
+        end
+    end)
+    wlBtn:SetScript("OnEnter", function(self)
+        local r = self:GetParent()
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if r.itemID and SR:IsInWishlist(r.itemID) then
+            GameTooltip:SetText(SR.L.UI_WISHLIST_REMOVE_TOOLTIP)
+        else
+            GameTooltip:SetText(SR.L.UI_WISHLIST_ADD_TOOLTIP)
+        end
+        GameTooltip:Show()
+    end)
+    wlBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    row.wlBtn = wlBtn
+
     -- Назва предмета
-    -- Ширина 335 (було 380) — при довгій назві предмета старе значення
-    -- геометрично налазило на бейдж "X SR" праворуч (той анкориться
-    -- від правого краю рядка, а не має фіксованого x).
+    -- Ширина 300 (було 335, було 380) — звужена ще раз, щоб звільнити
+    -- місце під сердечко вішліста праворуч (те анкориться від правого
+    -- краю рядка, а не має фіксованого x).
     row.nameFS = SR:MakeLabel(row, 11, 1, 0.82, 0, "LEFT")
     row.nameFS:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-    row.nameFS:SetWidth(335)
+    row.nameFS:SetWidth(300)
     row.nameFS:SetWordWrap(false)
 
-    -- Іконка вішліста (рейд-маркер зірка)
+    -- Іконка вішліста (рейд-маркер зірка) — маленький бейдж на іконці
+    -- предмета, окремо від інтерактивного сердечка вище.
     local wlIcon = row:CreateTexture(nil, "OVERLAY")
     wlIcon:SetSize(16, 16)
     wlIcon:SetPoint("TOPLEFT", row.icon, "TOPLEFT", -6, 6)
@@ -301,10 +325,10 @@ local function GetLBItemRow(container, index)
 
     -- SR бейдж фон видалено для кращого вигляду
 
-    -- Текст SR
+    -- Текст SR — анкориться від сердечка, а не від краю рядка.
     row.srFS = SR:MakeLabel(row, 10, 0.45, 0.82, 0.35, "CENTER")
-    row.srFS:SetPoint("RIGHT", -4, 0)
-    row.srFS:SetWidth(66)
+    row.srFS:SetPoint("RIGHT", wlBtn, "LEFT", -4, 0)
+    row.srFS:SetWidth(56)
 
     -- Підказка при наведенні
     row:SetScript("OnEnter", function(self)
@@ -599,11 +623,16 @@ function SR:UpdateLootBrowserItems()
             row.srFS:SetText("")
         end
 
-        -- Відображення іконки вішліста
+        -- Відображення іконки вішліста + стан сердечка (заповнене й
+        -- кольорове, якщо предмет вже в обраному, інакше приглушене сіре)
         if SR:IsInWishlist(itemID) then
             row.wlIcon:Show()
+            row.wlBtn.tex:SetVertexColor(1, 0.25, 0.35)
+            row.wlBtn.tex:SetDesaturated(false)
         else
             row.wlIcon:Hide()
+            row.wlBtn.tex:SetVertexColor(0.5, 0.5, 0.5)
+            row.wlBtn.tex:SetDesaturated(true)
         end
 
         -- Підсвітка, якщо предмет вибрано
@@ -617,16 +646,6 @@ function SR:UpdateLootBrowserItems()
     -- Приховування зайвих предметів
     for i = #items + 1, #self.lbItemRows do
         self.lbItemRows[i]:Hide()
-    end
-
-    if self.lbWishlistBtn then
-        if self.lbSelectedItemID and self:IsInWishlist(self.lbSelectedItemID) then
-            self.lbWishlistBtn:SetText("Видалити з обраного")
-            self.lbWishlistBtn:SetWidth(140)
-        else
-            self.lbWishlistBtn:SetText("В обране")
-            self.lbWishlistBtn:SetWidth(140)
-        end
     end
 
     self.lbItemChild:SetHeight(math.max(1, #items * SR.UI.ITEM_H))
@@ -647,16 +666,6 @@ function SR:HighlightLBItem(itemID)
                 end
                 row.bg:SetVertexColor(0.12, 0.12, 0.18, (idx % 2 == 0) and 0.3 or 0)
             end
-        end
-    end
-
-    if self.lbWishlistBtn then
-        if self.lbSelectedItemID and self:IsInWishlist(self.lbSelectedItemID) then
-            self.lbWishlistBtn:SetText("Видалити з обраного")
-            self.lbWishlistBtn:SetWidth(140)
-        else
-            self.lbWishlistBtn:SetText("В обране")
-            self.lbWishlistBtn:SetWidth(140)
         end
     end
 
