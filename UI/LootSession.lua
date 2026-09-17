@@ -19,32 +19,16 @@ function SR:BuildLootSession(parent)
     topBar:SetPoint("TOPRIGHT", -8, -6)
     topBar:SetHeight(28)
 
-    -- Іконка замість текстової кнопки оновлення: з трьома текстовими
-    -- елементами (дві вкладки + повнорозмірна кнопка) у топбарі майже не
-    -- лишалось зазору — текст "Оновити сумки" наїжджав на вкладку
-    -- "Активний розрол". UI-RefreshButton не рендерився в грі (черговий
-    -- невірний шлях текстури) — та сама золота рамка-база, що й в інших
-    -- іконок аддону, + кастомна золота стрілка-оновлення (Media/icon_refresh.tga)
-    -- маленьким оверлеєм.
-    local btnRefreshBags = CreateFrame("Button", nil, topBar)
-    btnRefreshBags:SetSize(24, 24)
+    -- Текстова кнопка (як і було до заміни на іконку) — два готових
+    -- варіанти іконки (вбудована UI-RefreshButton і кастомна намальована)
+    -- виглядали невдало/обрізано, тож простіше й надійніше лишити текст.
+    -- Вкладки нижче анкоряться відносно цієї кнопки і самі підлаштовують
+    -- свою ширину під те, скільки місця вона займає.
+    local btnRefreshBags = SR:MakeButton(topBar, self.L.BAG_LOOT_REFRESH, 130, 24)
     btnRefreshBags:SetPoint("RIGHT", 0, 0)
-    btnRefreshBags:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
-    btnRefreshBags:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
-    btnRefreshBags:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    local btnRefreshBagsIcon = btnRefreshBags:CreateTexture(nil, "OVERLAY")
-    btnRefreshBagsIcon:SetSize(14, 14)
-    btnRefreshBagsIcon:SetPoint("CENTER", btnRefreshBags, "CENTER", 0, -1)
-    btnRefreshBagsIcon:SetTexture("Interface\\AddOns\\SoftRollManager\\Media\\icon_refresh.tga")
     btnRefreshBags:SetScript("OnClick", function()
         SR:RefreshBagLoot()
     end)
-    btnRefreshBags:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText(SR.L.BAG_LOOT_REFRESH)
-        GameTooltip:Show()
-    end)
-    btnRefreshBags:SetScript("OnLeave", function() GameTooltip:Hide() end)
     self.btnRefreshBags = btnRefreshBags
 
     -- Вкладки розтягнуті на всю доступну ширину (до кнопки оновлення) і
