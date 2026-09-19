@@ -24,6 +24,7 @@ function M.reset()
     M.state.sentAddon        = {}   -- захоплені виклики SendAddonMessage
     M.state.printed          = {}   -- захоплені DEFAULT_CHAT_FRAME:AddMessage
     M.state.bags             = { [0] = {}, [1] = {}, [2] = {}, [3] = {}, [4] = {} }
+    M.state.popupsShown      = {}   -- захоплені виклики StaticPopup_Show (список which-імен)
 end
 
 --- Додає предмет у слот сумки для тестування сканера сумок.
@@ -187,6 +188,18 @@ function M.install()
     end
 
     _G.RegisterAddonMessagePrefix = function() end
+
+    -- Мінімальна заглушка діалогів підтвердження. Реальний UI (Ledger.lua,
+    -- не покритий тестами) реєструє StaticPopupDialogs["ІМ'Я"] = {OnAccept=...},
+    -- тому тут просто фіксуємо факт виклику — тести самі викликають
+    -- OnAccept вручну, якщо їм треба перевірити поведінку після підтвердження.
+    _G.StaticPopupDialogs = _G.StaticPopupDialogs or {}
+    _G.StaticPopup_Show = function(which, _textArg1, _textArg2, data)
+        table.insert(M.state.popupsShown, which)
+        local dialog = { which = which, data = data }
+        M.state.lastPopupDialog = dialog
+        return dialog
+    end
 
     _G.format = string.format
 

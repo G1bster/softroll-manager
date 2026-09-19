@@ -228,10 +228,16 @@ function SR:SlashHandler(msg)
     msg = strtrim(msg or ""):lower()
 
     if msg == "reset" then
-        if self.sessionActive and not self:IsSessionHost() then
+        -- Та сама перевірка прав, що й видимість кнопки "Очистити всі
+        -- софти" в реєстрі (не просто "сесія неактивна" — інакше будь-хто
+        -- в рейді, чий локальний sessionActive ще false через затримку
+        -- при вході/релоді, міг би обнулити ВЕСЬ рейд одним "/sr reset",
+        -- без жодного підтвердження).
+        local canResetAll = self:IsSessionHost() or (not self.sessionActive and self:IsSessionLeader())
+        if not canResetAll then
             self:Print(self.L.PRINT_ONLY_HOST_RESET)
         else
-            self:ResetAllSR()
+            StaticPopup_Show("SOFTROLL_CONFIRM_CLEAR")
         end
     elseif msg == "lock" then
         self.locked = true
@@ -751,7 +757,11 @@ function SR:ClearPlayerSR(playerName)
 end
 
 function SR:ResetAllSR()
-    if self.sessionActive and not self:IsSessionHost() then return end
+    -- Захист "в глибину": та сама умова, що й для видимості кнопки
+    -- "Очистити всі софти" й для /sr reset — не просто "сесія неактивна",
+    -- бо це пропускало б будь-кого без прав лідера, чий sessionActive ще
+    -- false через затримку при вході/релоді.
+    if not (self:IsSessionHost() or (self:IsSessionLeader() and not self.sessionActive)) then return end
     self.db.reserves = {}
     self:Print(self.L.PRINT_ALL_CLEARED)
     if self.UpdateLedger    then self:UpdateLedger()    end

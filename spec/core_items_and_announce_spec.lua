@@ -417,11 +417,15 @@ describe("SR item cache, announcements, roll tracker, and slash handler (Core.lu
     end)
 
     describe("SlashHandler", function()
-        it("'reset' clears all SR when there's no active session", function()
+        it("'reset' asks for confirmation (does not clear immediately) when authorized", function()
             wow.addItem(49978, "Crushing Coldwraith Belt", ITEM_LINK)
             SR:AddSR("Ann", ITEM_LINK, 1)
             SR:SlashHandler("reset")
-            assert.are.equal(0, SR:GetUsedSRCount("Ann"))
+            -- Не має очищати одразу без підтвердження — інакше випадковий
+            -- набір "/sr reset" ким завгодно з правами хоста миттєво стирає
+            -- весь рейд без жодного запобіжника.
+            assert.are.equal(1, SR:GetUsedSRCount("Ann"))
+            assert.are.equal("SOFTROLL_CONFIRM_CLEAR", wow.state.popupsShown[#wow.state.popupsShown])
         end)
 
         it("'reset' is refused for a non-host during an active session", function()
@@ -434,6 +438,24 @@ describe("SR item cache, announcements, roll tracker, and slash handler (Core.lu
             SR:SlashHandler("reset")
 
             assert.are.equal(1, SR:GetUsedSRCount("Ann")) -- untouched
+            assert.matches("Лише активний хост", wow.state.printed[#wow.state.printed])
+        end)
+
+        it("'reset' is refused for a regular raid member even when sessionActive is locally false", function()
+            -- Регресія: раніше умова була "sessionActive AND not host", тож
+            -- будь-хто без прав лідера, чий локальний sessionActive ще не
+            -- встиг стати true (напр. одразу після входу/релоду, поки не
+            -- прийшло "S|host"), міг обнулити софти ВСЬОГО рейду через
+            -- /sr reset — воно транслює "W" і стирає резерви в усіх клієнтів.
+            wow.addItem(49978, "Crushing Coldwraith Belt", ITEM_LINK)
+            SR:AddSR("Ann", ITEM_LINK, 1)
+            wow.addRaidMember("Leader", 2)
+            SR.sessionActive = false -- ще не отримали підтвердження сесії
+
+            SR:SlashHandler("reset")
+
+            assert.are.equal(1, SR:GetUsedSRCount("Ann")) -- untouched
+            assert.same({}, wow.state.popupsShown)
             assert.matches("Лише активний хост", wow.state.printed[#wow.state.printed])
         end)
 
