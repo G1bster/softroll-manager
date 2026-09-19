@@ -317,16 +317,23 @@ describe("SR session lifecycle, sync protocol, and co-host broadcast (Comms.lua)
             assert.are.equal("Leader", msg.target)
         end)
 
-        it("diff sync: a full Q...Z round replaces the local list with exactly what the host confirms", function()
-            SR.db.reserves["StalePlayer"] = { { itemID = 999, count = 1 } } -- host won't mention this one
+        it("sync round only adds/updates what the host confirms — never prunes players the host didn't mention", function()
+            -- Regression guard: a full Q...Z round used to delete every local
+            -- player the host's reply never named. That's catastrophic the
+            -- moment senderName is a NEW host (e.g. after the previous RL
+            -- disconnected) whose own db.reserves is still empty/incomplete —
+            -- it would wipe the whole raid's correct local data down to
+            -- whatever the fresh host happens to know about. A sync round
+            -- must only ever add or update entries, never delete by omission.
+            SR.db.reserves["UnmentionedPlayer"] = { { itemID = 999, count = 1 } }
             SR.sessionHost = "Leader"
 
             SR:RequestSessionSync()
             SR:OnSyncPlayer("KeptPlayer|TANK|49978:2")
             SR:OnSyncComplete()
 
-            assert.is_nil(SR.db.reserves["StalePlayer"]) -- pruned: host never confirmed it
-            assert.is_not_nil(SR.db.reserves["KeptPlayer"]) -- host did confirm it
+            assert.is_not_nil(SR.db.reserves["UnmentionedPlayer"]) -- kept: never touched by this round
+            assert.is_not_nil(SR.db.reserves["KeptPlayer"]) -- added: host did confirm it
         end)
 
         it("diff sync: a player the host explicitly reports as empty is still 'seen' and not left dangling", function()
